@@ -129,6 +129,26 @@ The tree is the normalized returned comment structure, not an assertion that eve
 
 `--raw` attaches the original upstream node as `raw` for the commands that support it: `search`, `blog`, `posts`, `buddies`, and `topic`. It is not produced by default, and output serialization otherwise uses only the normalized model fields above. Raw data can contain fields outside this stable schema and can increase privacy, retention, and compatibility risk; protect it as described in [Security and Privacy](Security-and-Privacy.md#local-output-and-raw-data).
 
+## Known upstream fields this schema does not expose
+
+There is **no view-count field**. The popular listing (`posts --sort popular`) is the one surface
+where Naver supplies a real one — `viewCount`, an integer, present on all 250 cards sampled across
+25 blogs, ranging from about 3,900 to 52,700. Every other listing carries `readCount` and it is
+always null.
+
+It is deliberately not normalized: a field that only one of seven commands can populate would be
+null on nearly every `Post` the CLI emits, and `--sort popular` already answers "which posts are
+popular" with an ordering. If you need the magnitude rather than the rank, read it from the raw
+node:
+
+```bash
+agentic-blog posts <blog-id> --sort popular --raw --output /tmp/popular.json
+# each item's raw.viewCount holds the count
+```
+
+Treat it as upstream data outside the stable schema, with the same cautions as any other `raw`
+field.
+
 ## Generated schema and catalog
 
 `agentic-blog schema --json` emits draft 2020-12 JSON Schema generated from the actual serialization methods. It includes `$defs` for `Post`, `Blog`, `Topic`, `Comment`, `Media`, and `Category`, marks always-present fields as required, and disallows additional properties in those model objects. Use it rather than copying this page into a validator.
