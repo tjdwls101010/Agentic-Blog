@@ -434,6 +434,7 @@ def test_posts_query_still_rejects_incompatible_grammar_before_client_creation(m
 
     assert raised.value.code == 1
 
+
 def test_phase3_commands_are_catalogued_with_concrete_output_types():
     commands = {command["name"]: command["output"] for command in cli.build_catalog()["commands"]}
 

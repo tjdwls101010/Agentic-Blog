@@ -281,9 +281,7 @@ def _search_text(value: object | None) -> str | None:
     def remove_highlight(match: re.Match[str]) -> str:
         classes = _tag_class(match["attributes"])
         marker = _HIGHLIGHT_CLASSES[match["tag"].lower()]
-        return (
-            match["content"] if classes is not None and marker in classes.split() else match[0]
-        )
+        return match["content"] if classes is not None and marker in classes.split() else match[0]
 
     return _drop_lone_surrogates(unescape(_HIGHLIGHT_TAG.sub(remove_highlight, value)))
 
@@ -493,7 +491,8 @@ def build_mobile_search_post(
         log_no=log_no,
         blog_id=blog_id,
         blog_no=_search_id(node["blogNo"]) if node.get("blogNo") is not None else None,
-        url=_search_nullable_string(node.get("url")) or f"https://blog.naver.com/{blog_id}/{log_no}",
+        url=_search_nullable_string(node.get("url"))
+        or f"https://blog.naver.com/{blog_id}/{log_no}",
         title=_search_text(node.get("title")) or "",
         brief=_search_text(summary),
         created_at=_search_created_at(node.get("addDate")),

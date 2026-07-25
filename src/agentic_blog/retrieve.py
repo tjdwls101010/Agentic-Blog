@@ -229,6 +229,7 @@ def search(
         return _result([], "limit_reached", starting_requests, client)
 
     if search_type in {"post", "tag"}:
+
         def fetch_mobile(page_number: int) -> tuple[dict[str, Any], ...]:
             if search_type == "tag":
                 spec = endpoints.mobile_tag_search(
@@ -298,7 +299,6 @@ def _request(client: SearchClient, spec: endpoints.RequestSpec) -> object:
     return payload
 
 
-
 def _request_text(client: SearchClient, spec: endpoints.RequestSpec) -> str:
     if not callable(getattr(client, "get_text", None)):
         raise ValueError("client must provide get_text")
@@ -313,17 +313,14 @@ def _request_text(client: SearchClient, spec: endpoints.RequestSpec) -> str:
     return payload
 
 
-
 def _can_request(client: SearchClient) -> bool:
     _, remaining_requests = _client_counters(client)
     return remaining_requests > 0
 
 
-
 def _validate_category(category: int) -> None:
     if not isinstance(category, int) or isinstance(category, bool) or category < 0:
         raise ValueError("category must be a non-negative integer")
-
 
 
 def fetch_blog(client: SearchClient, blog_id: str, *, raw: bool = False) -> RetrieveResult:

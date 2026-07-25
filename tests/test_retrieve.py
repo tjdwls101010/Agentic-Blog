@@ -536,8 +536,7 @@ def test_fetch_blog_composes_exact_id_profile_categories_and_raw_in_two_requests
     # Both were validated on the way in and then dropped before 0.2.0.
     assert result.items[0].post_count == PHASE3["category_list"]["result"]["mylogPostCount"]
     assert (
-        result.items[0].buddy_count
-        == PHASE3["public_buddies"]["result"]["totalPublicBuddyCount"]
+        result.items[0].buddy_count == PHASE3["public_buddies"]["result"]["totalPublicBuddyCount"]
     )
     assert client.specs[0].params == {
         "type": "id",
