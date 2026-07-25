@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
 
 from lxml import etree
@@ -18,10 +18,11 @@ __all__ = ["BodyResult", "PostSearchCard", "parse_post_body", "parse_post_search
 
 @dataclass(frozen=True)
 class BodyResult:
-    """Rendered post body and its embedded media in document order."""
+    """Rendered post body, its embedded media in document order, and its publish time."""
 
     markdown: str
     media: tuple[Media, ...]
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,16 @@ class PostSearchCard:
 _CLASS = "concat(' ', normalize-space(@class), ' ')"
 _SPACE = re.compile(r"[\t \r\f\v]+")
 _DATE = re.compile(r"^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})\.?$")
-_DATETIME = re.compile(r"^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s+(\d{1,2}):(\d{2})$")
+_DATETIME = re.compile(
+    r"^(\d{4})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})\.?\s+(\d{1,2}):(\d{2})$"
+)
+
+# Naver renders every HTML timestamp as Korean wall-clock with no offset attached. Left naive,
+# these are serialized as if they were UTC (see model._iso_utc) and land nine hours early.
+KST = timezone(timedelta(hours=9))
+
+# Recent posts are labelled relatively instead of with a date: "방금 전", "7시간 전", "어제".
+_RELATIVE_DATE = re.compile(r"(?:전|어제|오늘)$")
 
 
 def _class(name: str) -> str:
@@ -73,8 +83,11 @@ def _node_text(node: etree._Element) -> str:
         for child in current:
             if child.tag == "br":
                 parts.append("\n")
-            else:
+            elif isinstance(child.tag, str):
                 walk(child)
+            # Comments and processing instructions render nothing. SmartEditor ONE wraps its text
+            # modules in literal `<!-- SE-TEXT { -->` markers, and lxml exposes a comment's body as
+            # `.text`, so walking into them leaks editor scaffolding into the rendered output.
             if child.tail:
                 parts.append(child.tail)
 
@@ -204,15 +217,17 @@ def _legacy(container: etree._Element) -> BodyResult:
 def parse_post_body(source: str) -> BodyResult:
     """Parse one measured SmartEditor ONE or legacy post document."""
     document = _document(source)
+    created_at = _body_date(document)
     containers = document.xpath(f"descendant-or-self::*[{_class('se-main-container')}]")
     for container in containers:
         if _top_level_components(container):
-            return _se_one(container)
+            result = _se_one(container)
+            return replace(result, created_at=created_at)
     legacy = document.xpath(
         f"descendant-or-self::div[@id = 'viewTypeSelector' and {_class('post_ct')}]"
     )
     if legacy:
-        return _legacy(legacy[0])
+        return replace(_legacy(legacy[0]), created_at=created_at)
     raise _drift("a SmartEditor ONE container with components or div.post_ct#viewTypeSelector")
 
 
@@ -226,6 +241,17 @@ def _search_container(document: etree._Element) -> etree._Element | None:
     return candidates[0] if len(candidates) == 1 else None
 
 
+def _korean_wall_clock(value: str, expected: str) -> datetime:
+    """Parse a Naver-rendered date as the Korean wall-clock time it actually is."""
+    match = _DATETIME.fullmatch(value) or _DATE.fullmatch(value)
+    if match is None:
+        raise _drift(expected)
+    try:
+        return datetime(*(int(part) for part in match.groups()), tzinfo=KST)
+    except ValueError as error:
+        raise _drift("a valid post date") from error
+
+
 def _card_date(node: etree._Element) -> datetime | None:
     dates = node.xpath(
         f".//*[{_class('date')} or {_class('txt_date')} or {_class('post_date')} "
@@ -233,14 +259,31 @@ def _card_date(node: etree._Element) -> datetime | None:
     )
     if not dates:
         return None
-    value = _node_text(dates[0])
-    match = _DATETIME.fullmatch(value) or _DATE.fullmatch(value)
-    if match is None:
-        raise _drift("a YYYY. M. D. or YYYY/MM/DD HH:MM post-result date")
-    try:
-        return datetime(*(int(part) for part in match.groups()))
-    except ValueError as error:
-        raise _drift("a valid post-result date") from error
+    return _korean_wall_clock(
+        _node_text(dates[0]), "a YYYY. M. D. or YYYY/MM/DD HH:MM post-result date"
+    )
+
+
+def _body_date(document: etree._Element) -> datetime | None:
+    """Extract a post's own publish time from the rendered page, when it states one.
+
+    Naver labels recent posts relatively -- "7시간 전", "방금 전", "어제" -- with no absolute time
+    behind the label. Those carry a rounded interval, not a timestamp, so they are reported as no
+    publish time rather than converted: turning "7시간 전" into an instant invents precision the
+    page never gave, and the listing surfaces (`search`, `posts`) expose an exact `addDate` for the
+    same post anyway. Text that is neither form is still treated as template drift.
+    """
+    for node in document.xpath(
+        f"descendant-or-self::*[{_class('blog_date')} or {_class('se_publishDate')} "
+        f"or {_class('_postAddDate')}]"
+    ):
+        value = _node_text(node)
+        if not value:
+            continue
+        if _RELATIVE_DATE.search(value):
+            return None
+        return _korean_wall_clock(value, "a YYYY. M. D. HH:MM post publish date")
+    return None
 
 
 def _post_link(node: etree._Element) -> tuple[str, str, str] | None:

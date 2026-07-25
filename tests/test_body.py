@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agentic_blog.body import parse_post_body, parse_post_search
+from agentic_blog.body import KST, parse_post_body, parse_post_search
 from agentic_blog.errors import BodyParseError
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -96,7 +96,7 @@ def test_parse_post_search_extracts_only_anchored_cards() -> None:
             url="https://blog.naver.com/PostView.naver?blogId=synthetic_alice&logNo=17",
             title="첫 제목",
             brief="짧은 소개",
-            created_at=datetime(2026, 7, 25),
+            created_at=datetime(2026, 7, 25, tzinfo=KST),
         ),
         parse_post_search(source)[1].__class__(
             blog_id="synthetic_alice",
@@ -104,7 +104,7 @@ def test_parse_post_search_extracts_only_anchored_cards() -> None:
             url="/PostView.naver?blogId=synthetic_alice&logNo=18",
             title="둘째 제목",
             brief=None,
-            created_at=datetime(2026, 7, 24),
+            created_at=datetime(2026, 7, 24, tzinfo=KST),
         ),
     )
 
@@ -127,7 +127,7 @@ def test_parse_post_search_extracts_measured_legacy_table_variant() -> None:
     assert (card.blog_id, card.log_no) == ("synthetic_alice", "19")
     assert card.title == "표 기반 제목"
     assert card.brief == "표 기반 소개"
-    assert card.created_at == datetime(2026, 7, 25, 12, 34)
+    assert card.created_at == datetime(2026, 7, 25, 12, 34, tzinfo=KST)
 
 
 def test_parse_post_search_allows_only_explicit_empty_marker() -> None:
@@ -144,3 +144,81 @@ def test_parse_post_search_allows_only_explicit_empty_marker() -> None:
         parse_post_search("<div id='postSearchList'><ul></ul></div>")
     with pytest.raises(BodyParseError):
         parse_post_search("<div id='postSearchList'><ul><li>not linked</li></ul></div>")
+
+
+def test_editor_comment_markers_never_reach_the_rendered_body() -> None:
+    """SmartEditor ONE wraps text modules in literal `<!-- SE-TEXT { -->` HTML comments.
+
+    lxml exposes a comment's body as its `.text`, so a text walk that descends into comment nodes
+    emits editor scaffolding as if it were the author's writing. Reproduced on 12 of 30 live posts.
+    """
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-quotation">
+        <blockquote class="se-quotation-container">
+          <div class="se-module se-module-text se-quote"><!-- SE-TEXT -->
+            <p class="se-text-paragraph">인용문</p>
+          <!-- } SE-TEXT --></div>
+        </blockquote>
+      </div>
+    </div>
+    """
+
+    result = parse_post_body(source)
+
+    assert result.markdown == "> 인용문"
+    assert "SE-TEXT" not in result.markdown
+
+
+def test_post_body_publish_time_is_read_as_korean_wall_clock() -> None:
+    """`.blog_date` renders KST with no offset; left naive it serializes nine hours early."""
+    source = """
+    <div>
+      <span class="blog_date">2026. 7. 13. 15:38</span>
+      <div class="se-main-container">
+        <div class="se-component se-text">
+          <p class="se-text-paragraph">본문</p>
+        </div>
+      </div>
+    </div>
+    """
+
+    result = parse_post_body(source)
+
+    assert result.created_at == datetime(2026, 7, 13, 15, 38, tzinfo=KST)
+    assert result.created_at.utcoffset() is not None
+
+
+def test_post_body_without_a_rendered_date_reports_no_publish_time() -> None:
+    result = parse_post_body(_fixture("body_se_one.html"))
+
+    assert result.created_at is None
+
+
+@pytest.mark.parametrize("label", ["7시간 전", "방금 전", "3분 전", "어제", "오늘"])
+def test_relatively_labelled_posts_report_no_publish_time(label: str) -> None:
+    """Naver labels recent posts relatively; a rounded interval is not a timestamp."""
+    source = f"""
+    <div>
+      <span class="blog_date">{label}</span>
+      <div class="se-main-container">
+        <div class="se-component se-text"><p class="se-text-paragraph">본문</p></div>
+      </div>
+    </div>
+    """
+
+    assert parse_post_body(source).created_at is None
+
+
+def test_an_unrecognized_publish_date_is_still_treated_as_drift() -> None:
+    source = """
+    <div>
+      <span class="blog_date">last Tuesday</span>
+      <div class="se-main-container">
+        <div class="se-component se-text"><p class="se-text-paragraph">본문</p></div>
+      </div>
+    </div>
+    """
+
+    with pytest.raises(BodyParseError):
+        parse_post_body(source)

@@ -160,6 +160,13 @@ def _nullable_count(value: object, path: str) -> None:
         _non_negative_integer(value, path)
 
 
+def _nullable_play_time(value: object, path: str) -> None:
+    """A thumbnail's play length: seconds as an integer on video, null on stills."""
+    if value is None or isinstance(value, str):
+        return
+    _non_negative_integer(value, path)
+
+
 def _success_result(payload: object) -> dict[str, Any]:
     response = _object(payload, "response")
     _boolean(response.get("isSuccess"), "response.isSuccess")
@@ -169,15 +176,23 @@ def _success_result(payload: object) -> dict[str, Any]:
 
 
 def _validate_mobile_post(
-    node: dict[str, Any], path: str, *, full: bool, popular: bool = False
+    node: dict[str, Any],
+    path: str,
+    *,
+    full: bool,
+    kind: Literal["chronological", "notice", "popular"] = "chronological",
 ) -> None:
-    if popular:
-        _non_empty_string(node.get("blogId"), f"{path}.blogId")
-        _non_negative_integer(node.get("logNo"), f"{path}.logNo")
-    else:
+    # Only the chronological card names its blog with `domainIdOrBlogId`. Notice and popular cards
+    # are separate upstream shapes that carry `blogId` instead and leave `domainIdOrBlogId` null.
+    if kind == "chronological":
         _non_negative_integer(node.get("logNo"), f"{path}.logNo")
         _non_negative_integer(node.get("blogNo"), f"{path}.blogNo")
         _non_empty_string(node.get("domainIdOrBlogId"), f"{path}.domainIdOrBlogId")
+    else:
+        _non_empty_string(node.get("blogId"), f"{path}.blogId")
+        _non_negative_integer(node.get("logNo"), f"{path}.logNo")
+        if kind == "notice":
+            _non_negative_integer(node.get("blogNo"), f"{path}.blogNo")
     _string(node.get("titleWithInspectMessage"), f"{path}.titleWithInspectMessage")
     _nullable_string(node.get("thumbnailUrl"), f"{path}.thumbnailUrl")
     if not full:
@@ -185,7 +200,7 @@ def _validate_mobile_post(
     for name in ("briefContents", "categoryName"):
         _nullable_string(node.get(name), f"{path}.{name}")
     _non_negative_integer(node.get("smartEditorVersion"), f"{path}.smartEditorVersion")
-    if popular:
+    if kind == "popular":
         _nullable_non_negative_integer(node.get("categoryNo"), f"{path}.categoryNo")
     else:
         _non_negative_integer(node.get("categoryNo"), f"{path}.categoryNo")
@@ -199,8 +214,8 @@ def _validate_mobile_post(
         for name in ("type", "encodedThumbnailUrl", "videoAniThumbnailUrl"):
             _string(thumbnail.get(name), f"{thumbnail_path}.{name}")
         if "videoPlayTime" not in thumbnail:
-            raise _drift(f"{thumbnail_path}.videoPlayTime", "a string or null")
-        _nullable_string(thumbnail["videoPlayTime"], f"{thumbnail_path}.videoPlayTime")
+            raise _drift(f"{thumbnail_path}.videoPlayTime", "a string, an integer, or null")
+        _nullable_play_time(thumbnail["videoPlayTime"], f"{thumbnail_path}.videoPlayTime")
         for name in ("isPortraitThumbnail", "videoThumbnail", "vrthumbnail"):
             _boolean(thumbnail.get(name), f"{thumbnail_path}.{name}")
     for name in ("allOpenPost", "buddyOpen", "bothBuddyOpen", "notOpen"):
@@ -276,7 +291,7 @@ def parse_post_list(
             _object(value, path),
             path,
             full=kind in ("chronological", "popular"),
-            popular=kind == "popular",
+            kind=kind,
         )
     return tuple(items)
 
@@ -433,7 +448,9 @@ def _validate_cbox_card(
     for index, image_value in enumerate(images):
         image_path = f"{path}.imageList[{index}]"
         image = _object(image_value, image_path)
-        _string(image.get("imageUrl"), f"{image_path}.imageUrl")
+        # CBOX serves some attachments with `imageUrl` null and the CDN address under `url`.
+        _nullable_string(image.get("imageUrl"), f"{image_path}.imageUrl")
+        _nullable_string(image.get("url"), f"{image_path}.url")
         _non_negative_integer(image.get("width"), f"{image_path}.width")
         _non_negative_integer(image.get("height"), f"{image_path}.height")
 

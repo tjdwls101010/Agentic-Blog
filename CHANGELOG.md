@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-25
+
+### Fixed
+
+- `posts` no longer fails on blogs that contain videos. Naver reports a video thumbnail's play length as a number, which the response validator rejected; 21 of 30 sampled blogs were affected.
+- `posts --notices` no longer fails on blogs that have pinned notices. The notice surface is a distinct upstream shape that names its blog with `blogId`, and it was being validated as though it were an ordinary post listing; 14 of 30 sampled blogs were affected.
+- `post` now reports `created_at`. Single-post reads previously always returned a null publication time. Naver labels recent posts relatively instead ("7시간 전"), and those are still reported as no publish time rather than converted, because a rounded interval is not a timestamp — the listing surfaces expose an exact time for the same post.
+- Post dates from `posts --query` are no longer nine hours early. Timestamps rendered in a page are Korean wall-clock time and were being serialized as though they were UTC. All three surfaces that report a post's time — `search`, `posts --query`, and `post` — now agree.
+- Post bodies no longer contain `SE-TEXT` editor markers. SmartEditor ONE brackets its text blocks with HTML comments, which were being read as though they were the author's own writing; 12 of 30 sampled posts were affected.
+- `post` no longer fails on comments whose attached images carry their address in an alternate field.
+
+### Changed
+
+- The synthetic notice-listing fixture now mirrors the shape Naver actually returns. The previous fixture encoded an assumption that the live API never satisfies, which is why the notice defect above shipped.
+
 ## [0.1.0] - 2026-07-25
 
 ### Added
