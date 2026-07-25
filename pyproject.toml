@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-blog"
+version = "0.0.1"
+description = "Agentic Blog — an agentic crawler for blogs (work in progress)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "seongjin" }]
+keywords = ["blog", "crawler", "agent", "agentic"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/tjdwls101010/Agentic-Blog"
+Repository = "https://github.com/tjdwls101010/Agentic-Blog"
+Issues = "https://github.com/tjdwls101010/Agentic-Blog/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_blog"]
