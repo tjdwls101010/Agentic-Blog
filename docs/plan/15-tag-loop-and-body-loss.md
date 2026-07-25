@@ -203,18 +203,28 @@ endpoint appears in the bundles. Recording it as unresolved rather than as absen
 
 ## 3. The checklist
 
-| 지표 | 아크 시작 | 이 아크 완료 시 |
-|---|---|---|
-| 사람이 하는 행동 (열거) | 33 | 33 |
-| — 로그인 필요, 영구 범위 밖 | 5 | 5 |
-| — 익명 가능 여부 미확인 | 2 | **1** (해시태그 해결, 시리즈 남음) |
-| — 익명 가능 | 26 | **27** (해시태그가 확인되어 편입) |
-| — 도구가 커버 | 19 / 26 (73%) | **22 / 27 (81%)** |
-| exit 0인데 데이터가 틀린 결함 | **4** (본문·top 썸네일·notice·blog URL) | **0** |
-| 스키마가 약속하고 못 내주는 값 | **2** (`Media.kind` video·sticker) | **0** |
-| 컴포넌트를 조용히 버리는 글 | **43 / 54 (80%)** | **0 / 54** |
-| 오프라인 테스트 | 808 | 늘어남, 규칙마다 이름 붙은 테스트 |
-| 라이브 스윕 | — | 신규 표본으로 재스윕 |
+Left column measured at the start of the session, middle predicted before implementation, right
+measured after — including from a clean PyPI install of the published 0.3.0.
+
+| 지표 | 아크 시작 | 예상 | **아크 완료 (실측)** |
+|---|---|---|---|
+| 사람이 하는 행동 (열거) | 33 | 33 | 33 |
+| — 로그인 필요, 영구 범위 밖 | 5 | 5 | 5 |
+| — 익명 가능 여부 미확인 | 2 | 1 | **1** (해시태그 해결, 시리즈 남음) |
+| — 익명 가능 | 26 | 27 | **27** |
+| — 도구가 커버 | 19 / 26 (73%) | 22 / 27 (81%) | **22 / 27 (81%)** |
+| exit 0인데 데이터가 틀린 결함 | 4 | 0 | **0** |
+| 스키마가 약속하고 못 내주는 값 | 2 (`Media.kind`) | 0 | **0** — 네 종류 모두 실물에서 생성 확인 |
+| 컴포넌트를 조용히 버리는 글 | 43 / 54 (80%) | 0 / 54 | **0** — 실측 손실과 복구가 정확히 일치 (38→66 등) |
+| 오프라인 테스트 | 808 | 늘어남 | **854** (+46, 신규 28개는 규칙마다 이름을 가짐) |
+| 라이브 스윕 | — | 신규 표본 | **275 / 278** (30 신규 블로그 × 9 + 전역 8) |
+| **스윕이 잡은 신규 결함** | — | — | **1** (`updateTime` null — 모든 이전 릴리즈에 존재) |
+| **적대적 diff 리뷰가 잡은 결함** | — | — | **3** (§4 참조) |
+| 릴리즈 후 PyPI 클린 설치 검증 | — | — | **통과** |
+
+두 개의 "예상 밖" 행이 이 아크에서 가장 값어치 있는 부분입니다. 스윕과 적대적 리뷰가 없었다면
+네 건이 그대로 나갔고, 그중 하나는 이 diff가 다른 함수에서 고치고 있던 결함을 새 코드에서 재현한
+것이었습니다.
 
 ## 4. What the pre-release sweep found
 
@@ -246,6 +256,39 @@ docstring says it drops it. So this is the mirror image of §1.4's defect class:
 and then discarded, but a value *discarded* and yet validated more strictly than the data supports.
 It is fixed by accepting the measured null while still rejecting a non-string, and it ships in this
 release: 1 blog in 30 is not an edge case, and it fails three commands at once.
+
+### 4.1 What the adversarial review of the finished diff found
+
+A second model was given the completed diff and asked to **break it**, not to approve it. Three of
+its four findings were real, and one of them is the most instructive thing in this arc.
+
+**It found the diff reproducing the very defect it was fixing.** Item 8 changed `fetch_blog` to stop
+reporting `single_target` when the budget had truncated it. The new tag fetch in `fetch_post`, written
+in the same pass, did exactly what item 8 was removing: fetched tags only if a request remained, then
+returned `single_target` regardless. Worse, a test had been written asserting that stop reason, so the
+defect was locked in by something that looked like coverage. Two functions, one session, opposite
+behaviour — which is what a checklist of fixes cannot catch and an adversary reading for a *class* of
+error can.
+
+**It found a wrong value dressed as a right one.** The video handler emitted
+`Media(kind="video", url=<thumbnail JPEG>)`. `Media.url` is published as the attachment URL, so a
+consumer would have fetched a still image expecting a video. The module genuinely carries no player
+URL, so the honest answer was neither to invent one nor to discard the thumbnail: `Media` gained a
+`thumbnail_url`, and `url` is null. That also gave `se-oembed` somewhere honest to go — reported as
+`unknown`, because an oembed can be a video, a post, or a map and the module does not say which,
+which makes all four published `MediaKind` values reachable for the first time.
+
+**It found a caption attached to an image it did not belong to.** The image extractor resolved each
+caption over the whole component, which is correct when a component holds one image and wrong for the
+multi-image strips the new fallback started passing it — and the fallback also printed caption text
+as prose before the image printed it again. Small in practice (33 multi-image components measured, 32
+with no caption at all), and still a wrong value.
+
+**Its fourth finding was disproved by measurement**, and recording that matters as much as the
+others: it argued a component carrying two family classes would be matched by the first branch and
+lose its images. Checked against real markup — **387 of 387 components carry exactly one family
+class**, so the branch chain is sound and hardening it would have added code for a shape Naver does
+not produce.
 
 ## 5. Reproducing
 
