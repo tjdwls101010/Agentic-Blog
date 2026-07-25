@@ -29,6 +29,7 @@ Produced by `search --type post`, `post`, `posts`, and `topic`.
 | `title` | string | Post title. |
 | `brief` | string or null | Naver listing summary; not a post-body substitute. |
 | `body` | string or null | Rendered Markdown body; populated only by `post`. |
+| `tags` | array of string or null | Hashtags the post carries; populated only by `post`. `null` means nothing fetched them, an empty array means the post carries none. |
 | `created_at` | string or null | Normalized creation time. |
 | `blog_name` | string or null | Display name. |
 | `nickname` | string or null | Author nickname. |
@@ -111,6 +112,7 @@ The tree is the normalized returned comment structure, not an assertion that eve
 | --- | --- | --- |
 | `kind` | `photo`, `video`, `sticker`, or `unknown` | Attachment kind. |
 | `url` | string or null | Attachment URL. |
+| `thumbnail_url` | string or null | Attachment thumbnail URL. |
 | `caption` | string or null | Attachment caption. |
 | `width` | integer or null | Pixel width. |
 | `height` | integer or null | Pixel height. |

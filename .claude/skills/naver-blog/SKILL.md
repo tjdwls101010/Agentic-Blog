@@ -1,19 +1,26 @@
 ---
 name: Naver Blog retrieval
-description: Read Naver Blog (네이버 블로그) with the agentic-blog CLI — search posts, blogs, people, and 태그, filter reviews down to self-declared 내돈내산 posts, open a blog's category tree, list or search one blog's own posts, read a post's full body and its comment thread, browse the directory's topics, and walk the neighbour (이웃) graph — then chain those to answer multi-hop questions. Use whenever the user wants something off Naver Blog, however they phrase it: "네이버 블로그에서 X 찾아줘", "이 블로그 글 읽어줘", "X 후기 좀 모아줘", "이 블로거가 X에 대해 뭐라고 썼어?", "이 사람 주변에선 무슨 얘기해?", "요즘 블로그에서 뭐가 인기야?", or when they hand over a blog.naver.com or m.blog.naver.com URL. Also use when the user wants Korean first-hand opinion — 후기, 리뷰, 방문기, 내돈내산 — about a product, place, restaurant, or trip and has not named a source, because Naver Blog is where that lives. NOT for other blog platforms: Tistory, Velog, brunch, Medium, WordPress, Substack. NOT for other Naver services — 카페, 지식iN, 뉴스, 포스트, 쇼핑, 플레이스 are different products with no tool here. NOT for developing, testing, or releasing the agentic-blog package itself, which is ordinary repo work.
+description: Read Naver Blog (네이버 블로그) with the agentic-blog CLI — search posts, blogs, people, and 태그, filter reviews down to self-declared 내돈내산 posts, open a blog's category tree, list or search one blog's own posts by text or by 태그, read a post's full body with its tags and its comment thread, browse the directory's topics, and walk the neighbour (이웃) graph — then chain those to answer multi-hop questions. Use whenever the user wants something off Naver Blog, however they phrase it: "네이버 블로그에서 X 찾아줘", "이 블로그 글 읽어줘", "X 후기 좀 모아줘", "이 블로거가 X에 대해 뭐라고 썼어?", "이 사람 주변에선 무슨 얘기해?", "요즘 블로그에서 뭐가 인기야?", or when they hand over a blog.naver.com or m.blog.naver.com URL. Also use when the user wants Korean first-hand opinion — 후기, 리뷰, 방문기, 내돈내산 — about a product, place, restaurant, or trip and has not named a source, because Naver Blog is where that lives. NOT for other blog platforms: Tistory, Velog, brunch, Medium, WordPress, Substack. NOT for other Naver services — 카페, 지식iN, 뉴스, 포스트, 쇼핑, 플레이스 are different products with no tool here. NOT for developing, testing, or releasing the agentic-blog package itself, which is ordinary repo work.
 allowed-tools: Bash(agentic-blog:*), Bash(uv:*), Bash(pipx:*), Bash(curl:*), Read
 ---
 
 # Naver Blog retrieval
 
-`agentic-blog` reads Naver Blog's own public endpoints — no login, no browser, millisecond
-requests. It is deliberately a set of single-target primitives with **no `crawl` command**.
+`agentic-blog` reads Naver Blog's own public endpoints — no login, no browser. It is deliberately a
+set of single-target primitives with **no `crawl` command**.
 
 **The CLI retrieves. You navigate.** Deciding which blog to open next, which commenter is worth
 following, and when you have enough is not a gap in the tool; it is the job this skill exists to
 do.
 
-## Step 1 — get the tool, and get a current one
+## There is no setup, and that is the whole of it
+
+No `login`, no `setup`, no `status`, no browser, no account, no API key, no cookie. Install and read.
+Worth stating only because the reflex on a scraper is to go hunting for the authentication step and
+burn turns finding nothing. Every read is anonymous, which is also why nothing here can see
+이웃공개 content (last section).
+
+What does need a moment, once, before the user's actual work:
 
 ```bash
 agentic-blog --version
@@ -21,38 +28,24 @@ curl -s https://pypi.org/simple/agentic-blog/ \
   | grep -oE 'agentic[_-]blog-[0-9]+\.[0-9]+\.[0-9]+' | sed 's/.*-//' | sort -V | tail -1
 ```
 
-Read the installed version from `--version`, not from `catalog` — `--version` has existed in every
-release, so it still answers on the old installs this check exists to catch.
+Read the installed version from `--version` rather than `catalog`, because `--version` still answers
+on the ancient installs this check exists to catch, and read PyPI's from the **simple index** rather
+than the JSON API, because the two lag each other around a release.
 
-Read PyPI's version from the **simple index**, as above, not from `pypi.org/pypi/agentic-blog/json`:
-the two propagate independently and either can lag the other by minutes around a release.
-
-**Being behind matters more here than the version dance usually implies.** Unlike its sibling
-packages, this one tracks no rotating server tokens, so there is no drip of "upgrade or be broken"
-releases — but its fixes are *parser* fixes, and a parser fix is the difference between a command
-working and a command dying. In 0.1.0, `posts` failed on 21 of 30 real blogs. If the installed
-version is behind, say so in one line and upgrade before starting the user's actual work:
+**Being behind matters more here than a version check usually implies.** Nothing in this package
+tracks rotating server tokens, so there is no drip of upgrade-or-die releases — but its fixes are
+*parser* fixes, and a parser fix is the difference between a command working and a command dying. In
+0.1.0, `posts` failed on 21 of 30 real blogs. So if the installed version is behind, say so in one
+line and upgrade rather than working around whatever it does:
 
 ```bash
 uv tool install --upgrade --no-cache agentic-blog     # or: pipx upgrade agentic-blog
 ```
 
-Check once, at the start. The installed version cannot change under you unless you change it.
-
 If it isn't installed at all, `uv tool install agentic-blog` or `pipx install agentic-blog`. A repo
-checkout and the installed CLI are different things — the one on PATH is the one that counts.
+checkout is not an install — the one on PATH is the one that counts.
 
-## Step 2 — there is no setup
-
-No `login`, no `setup`, no `status`, no browser, no account, no API key, no cookie. Install and
-read.
-
-This is worth stating because the sibling scrapers all open with an authentication dance, so the
-reflex is to go looking for the equivalent here and burn turns finding nothing. There is nothing.
-Every read is anonymous, which is also why nothing here can see 이웃공개 content (see the last
-section).
-
-## Step 3 — ask the CLI what it can do
+## Ask the CLI what it can do
 
 ```bash
 agentic-blog catalog     # every command, its real flags, types, defaults, and the exit-code table
@@ -65,8 +58,10 @@ version the moment the package updates, and you would trust the copy over the tr
 need in order to *call* a command comes from the catalog.** What follows is only what the catalog
 cannot carry — how to decide what to call, and how to read what comes back.
 
-If a command is rejected as an `invalid choice`, that is an out-of-date install, not a missing
-feature. Go back to Step 1 rather than working around it.
+An `invalid choice` rejection means the installed CLI does not have that subcommand. Check it against
+`catalog` before concluding anything: if the command exists there, you mistyped it; if it does not
+and you expected it to, the install is old, which is the version check above rather than something
+to route around.
 
 ## Reading the output
 
@@ -104,9 +99,12 @@ what someone wrote, you need `body`, which means you need a `post` call.
 ## What the numbers and flags actually mean
 
 - **`comment_count` is the discussion's true size; `comments[]` is only what this call fetched.**
-  A post with `comment_count: 35` under `--comment-limit 3` gives you three comments. Reporting the
-  array's length as the number of comments understates it silently, by however much your own flag
-  cut off.
+  It counts replies too, while the array holds top-level comments with their replies nested inside
+  them — so `len(comments)` is smaller than `comment_count` on almost every post that has any
+  discussion at all, before any flag of yours gets involved. A bound applies to the top-level
+  threads, not to the total: `comment_count: 35` under a limit of 3 gives you three threads, however
+  many replies hang off them. Reporting the array's length as the number of comments understates it
+  silently, twice over.
 - **`visibility` arrives on listings, never on a single `post` read.** A post fetched directly
   carries no visibility signal at all, so its absence there is evidence of nothing.
 - **`created_at` can be null on a `post` read even though the post obviously has a date.** Naver
@@ -115,6 +113,11 @@ what someone wrote, you need `body`, which means you need a `post` call.
   time for the same post, so `search` or `posts` is where to get it when you need it.
 - **`captured_at` is when *you* scraped.** Sorting or deduplicating by it produces an ordering that
   means nothing.
+- **`tags: null` and `tags: []` are different answers.** Null means nothing fetched them — every
+  listing, and a `post` read whose budget ran out before the extra request. An empty list is the
+  measured answer that this post carries no tags, which happens: 80 of 82 sampled posts had at least
+  one, so a couple in thirty genuinely have none. An empty `tags` on a `post` read is a fact about
+  the post; a null one is a fact about your call.
 - **`Blog.buddy_count` counts only the neighbours the blog *discloses*.** Naver keeps a second,
   usually much larger total that it shows nobody but the owner — one measured blog publishes 0 of
   its 1,908. So `buddy_count: 0` means "this blog does not publish its neighbour list", not "this
@@ -134,50 +137,103 @@ The handles that make chaining possible:
   per blog, not globally, so always carry the blog id with it)
 - a comment's **`author_blog_id`** → that commenter's own blog. This is the edge from a post into
   the community around it, and nothing in the schema advertises it as one.
+- a post's **`tags`** → a tag search anywhere on Naver, or the same tag inside this one blog. Only a
+  `post` read fills these in; every listing leaves them null. See "Following a tag" below.
 - a `Topic`'s `seq` → `topic`
 
-Worked chains, with the judgment that matters at each hop:
+### Choosing the axis, not just the command
 
-**"X 후기 찾아줘"** — `search --type post`, then `post` the two or three most promising. The
-judgment is which ones are worth spending a read on, not how many results to collect.
+Most of these surfaces offer more than one axis, and the wrong axis wastes a read rather than
+failing it — so the choice is worth making deliberately rather than defaulting.
 
-**`--type post` vs `--type tag`** — these index different things, so the choice is about what kind
-of match you want. Post search reads the whole text, so it finds anything that *mentions* X, with
-the recall and the false positives that implies. Tags are what the author chose to file the post
-under: fewer results, but each one is a post someone considered to be *about* X. When a broad search
-drowns in passing mentions, the tag axis is the sharper instrument; when a topic is niche enough
-that few people tag it, it is the wrong one. Neither dominates, and nothing stops you trying both.
+**Whole text vs tags.** These index different things. Post search reads the body, so it finds
+anything that *mentions* X, with the recall and the false positives that implies. Tags are what the
+author chose to file the post under: fewer results, but each is a post someone considered to be
+*about* X. When a broad search drowns in passing mentions, the tag axis is the sharper instrument;
+when a topic is niche enough that few people tag it, it is the wrong one. Neither dominates, and
+nothing stops you trying both.
 
-**"이 블로거 어떤 사람이야?"** — `blog` first. The **category tree is the best single summary of a
-Naver blog**: its shape and per-category post counts describe what someone actually writes about
-faster and more completely than reading their posts does. Reading posts first is the expensive way
-to learn what one call already told you.
+**Finding a blog vs resolving an id.** Blog search matches blogs by subject and name — the right
+call for "제주 여행 블로그 추천해줘", where you do not know who you are looking for. Id search
+resolves a specific account, and it is also how you turn a nickname or a half-remembered handle into
+a real `blog_id` you can then chain from. Reaching for blog search when the user already named
+someone spends a request ranking strangers.
 
-**"이 블로그에서 X에 대해 쓴 글"** — `posts --query`. Pulling the whole post list and filtering it
-yourself burns the request budget on the question users ask most often.
+**Relevance vs recency.** Relevance ordering is the default and the right one when topical precision
+matters. Date ordering is what "요즘", "최근", "올해" actually ask for, and it is also the honest
+choice when the user wants a picture of current opinion rather than the best-matching post of the
+last decade — a highly-ranked review from 2019 answers a different question than it appears to.
+Server-side date bounds narrow harder than either ordering does, and unlike `--limit` they move the
+thousand-result ceiling instead of running into it.
 
-**"이 글 반응 어때?"** — `post` returns body and comment tree in one call. The thread is frequently
-more informative than the post, and replies nest inside each comment's `replies[]`.
+**Inside one blog, four surfaces answer four different questions.** In-blog text search for "what
+has this person written about X"; the same for a tag, when you want what they *filed* under X rather
+than what they mentioned; a category, when the category tree already handed you the right handle,
+which is cheaper and cleaner than searching; popularity, for what this blog's own readers actually
+read; notices, for the pinned post — which is where bloggers put their disclosure statements, their
+standing rules, and their self-description, so it is unusually informative for its size.
 
-**"이 사람 주변 사람들은 무슨 얘기해?"** — `buddies`, then `posts` on a few. An empty `buddies`
-result is ordinary, not an error: plenty of blogs expose no public neighbour list, and the honest
-report is "this blog doesn't publish one."
+**How much of a thread.** The full thread is the default and is usually right, because it is one
+call. Bound it when the post is famous enough that the thread is enormous, and skip comments
+entirely when the question is only about what the author wrote — that is a real request saved.
+Favourite ordering surfaces the comments other readers endorsed, which is the better read of
+*reception*; newest-first, the default, over-weights whoever arrived most recently.
+
+### Worked chains
+
+**"X 후기 찾아줘"** — search, then read the bodies of the ones worth a read. Which those are is the
+judgment: topical directness over keyword presence, a spread of authors rather than three posts from
+the same blog, dates that match what was asked, and a visible reason to trust the account. Collecting
+more results is the cheap substitute for choosing among them.
+
+**"이 블로거 어떤 사람이야?"** — `blog` first. The category tree and its per-category post counts
+describe what someone writes *about* faster than reading posts does, and in one call. It says nothing
+about voice, stance, or whether they still post, so sample posts when the question is one of those
+rather than one of subject.
+
+**"이 글 반응 어때?"** — one `post` call returns body and comment tree together. Replies nest inside
+each comment's `replies[]`, and the thread is often the more informative half.
+
+**"이 사람 주변 사람들은 무슨 얘기해?"** — `buddies`, then read a few. An empty `buddies` result is
+ordinary, not an error: plenty of blogs expose no public neighbour list, and the honest report is
+"this blog doesn't publish one." Neighbours who all write the same thing are one source, not five.
+
+### Following a tag
+
+Tags are Naver Blog's own "related posts" mechanism, and they are the only edge that runs *outward
+from a post's content* rather than from its author. A post you already judged good names the terms
+its writer thought it was about — which are better search queries than the ones you guessed, because
+a human who knows the topic chose them.
+
+The same tag then goes two ways, and they are different questions: searched globally it finds other
+people writing about the same thing; searched inside this blog it finds the rest of *this* author's
+posts on it, which is how you get from one good post to the series it belongs to.
+
+Nothing else exposes a post's tags — a listing leaves them null, and the post page's HTML does not
+carry them — so this hop only exists after a real `post` read.
 
 ## Is this the answer, or part of it?
 
-The stderr line ends with a `stop_reason`, and it is the difference between a complete result and a
-fragment presented as one.
+The stderr line ends with a `stop_reason`. It is the difference between a complete result and a
+fragment presented as one — but it answers a narrower question than it looks like it does, and two of
+the three readings that sound final have a way of being false.
 
-- **`no_next_page` / `no_matches` / `single_target`** — genuinely the end.
-- **`limit_reached`** — your own `--limit` stopped it. There is more.
-- **`max_requests`** — the per-invocation request budget stopped it, not the data. The result is
-  partial and reporting it as complete is simply wrong.
+- **`limit_reached`** — your own `--limit` stopped it. There is more. Unambiguous.
+- **`max_requests`** — the request budget stopped it, not the data. Partial, and which *part* is
+  partial depends on the command: a `post` that ends this way has a complete body and a truncated
+  comment thread, so the body is still usable even though the discussion is not.
+- **`no_matches`** — nothing matched. Genuinely empty.
+- **`single_target`** — one target was resolved. That is *not* the same as "you have everything
+  about it": a `post` reports `single_target` whether the whole thread came back, or
+  `--comment-limit` cut it off, or `--no-comments` skipped it entirely. Only your own flags tell
+  you which, and the output does not remind you what you asked for.
+- **`no_next_page`** — the endpoint stopped paginating. On a blog or a topic that is the end. On a
+  broad search it is not: **Naver stops handing out results after about a thousand posts per
+  query**, however many it claims to have matched, so this means "the index stopped answering", and
+  "전부 모았다" is never true of a popular keyword.
 
-One more end exists that no `stop_reason` distinguishes: **Naver's search stops handing out results
-after about a thousand posts per query**, however many it claims to have matched. So `no_next_page`
-on a broad search means "the index stopped answering", not "you have them all", and "전부 모았다" is
-never true of a popular keyword. When exhaustiveness is what the user actually wants, narrowing the
-query — a date window, a tag, one blog — reaches deeper than paging ever will.
+When exhaustiveness is what the user actually wants, narrowing — a date window, a tag, one blog —
+reaches deeper than paging ever will, because it moves the ceiling rather than climbing to it.
 
 ## What a chain costs
 
@@ -208,29 +264,30 @@ two failure directions are not symmetric:
 
 So this narrows the pool; it does not clean it. Describing those results as "광고 없는 후기" claims a
 guarantee that does not exist — "본인이 내돈내산이라고 밝힌 글" is the sentence that is actually true.
-Judgment stays the instrument, applied to a smaller pile, and a judgment the reader cannot see is a
-judgment they cannot check.
 
-Signals worth weighing before spending a `post` call: disclosure language in the body, a category
-tree that is entirely product reviews, a posting cadence too uniform to be a person's actual life.
-None of these is decisive alone.
+Judgment stays the instrument, applied to a smaller pile. Signals worth weighing: disclosure language
+in the body, a category tree that is entirely product reviews, a posting cadence too uniform to be a
+person's actual life, a pinned notice that is a rate card. None is decisive alone, and the label and
+the body can flatly disagree — a post titled 내돈내산 whose body says 수수료를 제공받습니다 is a real
+shape, not a hypothetical. When you drop a post on evidence like that, say which post and which
+sentence: an exclusion the reader cannot see is one they cannot check.
 
 ## When something fails
 
-`catalog` prints what each exit code *means*. This is what to do — and the theme is that failures
-here are informative rather than transient, so retrying the same command is rarely the fix.
+`catalog` prints what each code *means*. What it cannot tell you is that failures here are
+**informative rather than transient**, so re-running the same command is almost never the fix.
 
-- **1** — usage error or an invalid identifier. `invalid choice` specifically means an out-of-date
-  install: Step 1.
-- **3** — HTTP 429. Stop that line of work rather than looping. A measured 355-request serialized
-  run never saw one, so a 429 is a real signal about volume, not noise.
-- **4** — the response structure changed. There is no self-heal in this package: no browser to fall
-  back to and no token registry to re-anchor, so the fix ships as a release. Upgrade, or tell the
-  user it needs a newer version.
-- **5** — the target does not exist.
+- **1** — your call was wrong, not Naver. Fix the call; do not retry it.
+- **3** — stop that line of work rather than looping. A measured 355-request serialized run never
+  produced one, so this is a real signal about volume, not noise to wait out.
+- **4** — the response shape changed, and nothing here can route around it: no browser to fall back
+  to, no token registry to re-anchor, so the fix ships as a release. Upgrade, or tell the user it
+  needs a newer version. Do not try to out-guess a parser.
+- **5** — Naver said the target does not exist. It is specifically *not* the code for "exists but
+  you cannot see it": nothing in the package maps there, so do not report a 5 as a privacy wall.
 
-**There is no exit 2.** Every sibling scraper uses it for an authentication failure, and there is
-no authentication here, so a habit carried over from one of those will misread whatever it lands on.
+**There is no exit 2.** There is no authentication here for it to mean, so anything reading a 2 as an
+auth failure is a habit from a different tool misreading this one.
 
 ## The honest edge
 
@@ -240,10 +297,11 @@ What is known: listings carry a `visibility` of `buddy` or `both_buddy`, and a p
 very likely unreadable by an anonymous client — which this always is. That is a fact about the post,
 not a malfunction, and not something to apologise for or retry.
 
-What is **not** known: what actually happens when you try to read one. Recon spent 355 requests
-across twelve Korean and English search terms hunting for a specimen of any of these four classes
-and found none, so the package deliberately never mapped them. If you hit an odd failure on a post
-whose listing said `buddy`, report it as what it is rather than inventing a diagnosis.
+What is **not** known: what actually happens when you try to read one. A long hunt for a specimen of
+any of these four classes turned up none, so rather than guess a failure shape the package mapped
+nothing to them — which is why no exit code means "private". If you hit an odd failure on a post
+whose listing said `buddy`, report it as the odd failure it is rather than inventing a diagnosis
+that happens to fit.
 
 ## What doesn't exist
 

@@ -71,6 +71,7 @@ def test_post_serialization_uses_stable_json_values() -> None:
         "title": "안녕하세요, 서울",
         "brief": "한국어 요약",
         "body": "본문",
+        "tags": None,
         "created_at": "2026-07-25T12:30:45Z",
         "blog_name": None,
         "nickname": None,
@@ -84,6 +85,7 @@ def test_post_serialization_uses_stable_json_values() -> None:
             {
                 "kind": "photo",
                 "url": "https://example.test/사진.jpg",
+                "thumbnail_url": None,
                 "caption": "풍경",
                 "width": None,
                 "height": None,
@@ -790,7 +792,8 @@ def test_phase3_builders_normalize_fixture_surfaces_to_generated_schema() -> Non
         "name": "Synthetic Topic",
         "group_name": "Synthetic Group",
     }
-    assert all(post.thumbnail_url is None for post in directory_posts)
+    assert directory_posts[0].thumbnail_url is None
+    assert directory_posts[1].thumbnail_url == "https://media.example.invalid/posts/10003.jpg"
     assert all(
         post.media is None for post in [*chronological, *notices, *popular, *directory_posts]
     )
@@ -811,6 +814,15 @@ def test_phase3_builders_normalize_fixture_surfaces_to_generated_schema() -> Non
         for value in (post.log_no, post.blog_id, post.blog_no, post.category_no)
         if value is not None
     )
+
+
+def test_directory_top_post_builder_preserves_its_validated_thumbnail_url() -> None:
+    fixture = load_fixture("phase3.json")
+    node = parse_directory_posts(fixture["directory_top_post_list"], top=True)[0]
+
+    post = build_directory_post(node, captured_at=_CAPTURED_AT)
+
+    assert post.thumbnail_url == "https://media.example.invalid/posts/10003.jpg"
 
 
 def test_phase3_popular_mobile_post_uses_its_card_identity() -> None:

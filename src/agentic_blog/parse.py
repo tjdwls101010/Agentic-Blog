@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
+from urllib.parse import unquote
 
 from .errors import EnvelopeParseError
 
@@ -200,6 +201,11 @@ def _validate_mobile_post(
     _string(node.get("titleWithInspectMessage"), f"{path}.titleWithInspectMessage")
     _nullable_string(node.get("thumbnailUrl"), f"{path}.thumbnailUrl")
     if not full:
+        if kind == "notice":
+            if "commentCount" not in node:
+                raise _drift(f"{path}.commentCount", "an integer or null")
+            _nullable_count(node["commentCount"], f"{path}.commentCount")
+            _string(node.get("postOpenType"), f"{path}.postOpenType")
         return
     for name in ("briefContents", "categoryName"):
         _nullable_string(node.get(name), f"{path}.{name}")
@@ -343,6 +349,25 @@ def parse_post_list(
     return tuple(items)
 
 
+def parse_post_tags(payload: object, requested_log_no: str) -> list[str]:
+    """Extract one post's decoded tag list from BlogTagListInfo.naver."""
+    response = _object(payload, "response")
+    taglist = _list(response.get("taglist"), "response.taglist")
+    tags: list[str] = []
+    for index, value in enumerate(taglist):
+        path = f"response.taglist[{index}]"
+        node = _object(value, path)
+        tag_name = _string(node.get("tagName"), f"{path}.tagName")
+        log_no = _string(node.get("logno"), f"{path}.logno")
+        # No mismatch appeared in 52 measured responses; one signals envelope drift.
+        if log_no != requested_log_no:
+            raise _drift(f"{path}.logno", f"{requested_log_no!r}")
+        # encTagName is the same text encoded as legacy CP949 bytes, not UTF-8.
+        # Commas delimit tags; a comma inside a tag would be indistinguishable from two tags.
+        tags.extend(tag for tag in unquote(tag_name).split(",") if tag)
+    return tags
+
+
 def parse_buddies(payload: object) -> BuddyPage:
     """Extract one public buddy page while retaining raw buddy cards and update labels."""
     result = _success_result(payload)
@@ -368,8 +393,12 @@ def parse_buddies(payload: object) -> BuddyPage:
         path = f"response.result.buddyList[{index}]"
         node = _object(value, path)
         _non_empty_string(node.get("blogId"), f"{path}.blogId")
-        for name in ("blogName", "nickName", "linkUrl", "blogProfileImage", "updateTime"):
+        for name in ("blogName", "nickName", "linkUrl", "blogProfileImage"):
             _string(node.get(name), f"{path}.{name}")
+        # `updateTime` is a display label ("26.07.25.") that build_buddy_blog drops, and a
+        # neighbour with nothing to show carries null: 2 of 34 buddies on one sampled blog.
+        # Requiring a string here failed `buddies` and `blog` outright on that blog.
+        _nullable_string(node.get("updateTime"), f"{path}.updateTime")
         _non_negative_integer(node.get("blogNo"), f"{path}.blogNo")
     return BuddyPage(
         items=tuple(buddies),

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from lxml import html as lxml_html
 
 from agentic_blog.body import KST, parse_post_body
 from agentic_blog.errors import BodyParseError
@@ -15,6 +16,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def _fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def _se_one_fixture_fragment(fragment_id: str) -> str:
+    document = lxml_html.fromstring(_fixture("body_se_one.html"))
+    node = document.get_element_by_id(fragment_id)
+    return lxml_html.tostring(node, encoding="unicode")
 
 
 def test_parse_se_one_body_preserves_component_order_and_lazy_image() -> None:
@@ -31,6 +38,7 @@ def test_parse_se_one_body_preserves_component_order_and_lazy_image() -> None:
         {
             "kind": "photo",
             "url": "https://example.invalid/lazy.jpg",
+            "thumbnail_url": None,
             "caption": "이미지 설명",
             "width": 640,
             "height": 480,
@@ -72,6 +80,145 @@ def test_parse_post_body_does_not_duplicate_nested_component_content() -> None:
 
     assert result.markdown == "밖"
     assert result.media == ()
+
+
+def test_supported_and_unsupported_components_both_contribute_content() -> None:
+    result = parse_post_body(_se_one_fixture_fragment("mixed-components"))
+
+    assert result.markdown == (
+        "지원 본문\n\n새 제목\n\n![제목 이미지](https://example.invalid/title.jpg)"
+    )
+    assert [item.url for item in result.media] == ["https://example.invalid/title.jpg"]
+
+
+def test_image_strip_and_group_preserve_document_order_in_media_and_markdown() -> None:
+    result = parse_post_body(_se_one_fixture_fragment("grouped-images"))
+
+    assert result.markdown == (
+        "앞 문장\n\n![스트립](https://example.invalid/strip.jpg)\n\n중간 문장\n\n"
+        "![그룹](https://example.invalid/group.jpg)\n\n뒤 문장"
+    )
+    assert [item.url for item in result.media] == [
+        "https://example.invalid/strip.jpg",
+        "https://example.invalid/group.jpg",
+    ]
+
+
+def test_sticker_component_produces_sticker_media_not_photo() -> None:
+    result = parse_post_body(_se_one_fixture_fragment("sticker-component"))
+
+    assert [item.kind for item in result.media] == ["sticker"]
+    assert result.media[0].url == "https://storep-phinf.pstatic.net/sticker.png"
+
+
+def test_video_component_produces_video_media_from_module_data() -> None:
+    result = parse_post_body(_se_one_fixture_fragment("video-component"))
+
+    assert result.media[0].to_dict() == {
+        "kind": "video",
+        "url": None,
+        "thumbnail_url": "https://phinf.pstatic.net/image.nmv/video.jpg",
+        "caption": "합성 영상",
+        "width": 693,
+        "height": 389,
+    }
+
+
+def test_oembed_component_surfaces_embedded_resource_url() -> None:
+    result = parse_post_body(_se_one_fixture_fragment("oembed-component"))
+
+    assert result.markdown == ("[합성 외부 영상](https://example.invalid/watch/video)")
+    assert result.media[0].to_dict() == {
+        "kind": "unknown",
+        "url": "https://example.invalid/watch/video",
+        "thumbnail_url": "https://example.invalid/oembed.jpg",
+        "caption": "합성 외부 영상",
+        "width": None,
+        "height": None,
+    }
+
+
+def test_all_four_media_kind_values_are_producible() -> None:
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-image"><img src="https://example.invalid/photo.jpg"></div>
+      <div class="se-component se-sticker"><img src="https://example.invalid/sticker.png"></div>
+      <div class="se-component se-video"><script class="__se_module_data"
+        data-module='{"data":{"thumbnail":"https://example.invalid/video.jpg"}}'></script></div>
+      <div class="se-component se-oembed"><script class="__se_module_data"
+        data-module='{"data":{"inputUrl":"https://example.invalid/embed"}}'></script></div>
+    </div>
+    """
+
+    assert [item.kind for item in parse_post_body(source).media] == [
+        "photo",
+        "sticker",
+        "video",
+        "unknown",
+    ]
+
+
+def test_multi_image_component_assigns_each_caption_to_its_own_image() -> None:
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-imageStrip">
+        <figure>
+          <img src="https://example.invalid/one.jpg"><span class="se-caption">하나</span>
+        </figure>
+        <figure>
+          <img src="https://example.invalid/two.jpg"><span class="se-caption">둘</span>
+        </figure>
+      </div>
+    </div>
+    """
+
+    result = parse_post_body(source)
+
+    assert [item.caption for item in result.media] == ["하나", "둘"]
+    assert result.markdown == (
+        "![하나](https://example.invalid/one.jpg)\n\n![둘](https://example.invalid/two.jpg)"
+    )
+
+
+def test_multi_image_component_caption_is_not_printed_twice() -> None:
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-imageGroup">
+        <figure>
+          <img src="https://example.invalid/one.jpg"><span class="se-caption">하나</span>
+        </figure>
+        <figure><img src="https://example.invalid/two.jpg" alt="둘"></figure>
+      </div>
+    </div>
+    """
+
+    result = parse_post_body(source)
+
+    assert result.markdown.count("하나") == 1
+    assert result.markdown == (
+        "![하나](https://example.invalid/one.jpg)\n\n![둘](https://example.invalid/two.jpg)"
+    )
+
+
+def test_unknown_future_component_family_contributes_visible_text() -> None:
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-somethingNaverAddedLater">미래 컴포넌트 본문</div>
+    </div>
+    """
+
+    assert parse_post_body(source).markdown == "미래 컴포넌트 본문"
+
+
+def test_unsupported_component_without_text_or_images_is_unreadable() -> None:
+    source = """
+    <div class="se-main-container">
+      <div class="se-component se-somethingNaverAddedLater"><span></span></div>
+    </div>
+    """
+
+    with pytest.raises(BodyParseError):
+        parse_post_body(source)
 
 
 def test_editor_comment_markers_never_reach_the_rendered_body() -> None:

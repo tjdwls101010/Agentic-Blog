@@ -114,7 +114,7 @@ def test_catalog_stays_derived_from_handlers_and_parser():
     posts_flags = {
         flag for argument in catalog_commands["posts"]["arguments"] for flag in argument["flags"]
     }
-    assert "--raw" in posts_flags
+    assert {"--raw", "--tag"} <= posts_flags
     assert catalog_commands["catalog"]["arguments"] == []
 
 
@@ -481,6 +481,7 @@ def test_phase3_commands_are_catalogued_with_concrete_output_types():
                 "sort": "recent",
                 "notices": False,
                 "query": None,
+                "tag": None,
                 "limit": 3,
                 "raw": True,
             },
@@ -504,6 +505,7 @@ def test_phase3_commands_are_catalogued_with_concrete_output_types():
                 "sort": "popular",
                 "notices": False,
                 "query": None,
+                "tag": None,
                 "limit": 2,
                 "raw": True,
             },
@@ -527,6 +529,7 @@ def test_phase3_commands_are_catalogued_with_concrete_output_types():
                 "sort": "recent",
                 "notices": True,
                 "query": None,
+                "tag": None,
                 "limit": 1,
                 "raw": True,
             },
@@ -646,6 +649,66 @@ def test_phase4_cli_rejects_invalid_post_and_query_combinations(argv, capsys):
 
     assert raised.value.code == 1
     assert "error:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["posts", "blog", "--tag", ""],
+        ["posts", "blog", "--tag", "coffee", "--query", "tea"],
+        ["posts", "blog", "--tag", "coffee", "--category", "1"],
+        ["posts", "blog", "--tag", "coffee", "--sort", "popular"],
+        ["posts", "blog", "--tag", "coffee", "--notices"],
+    ],
+)
+def test_posts_tag_rejects_every_incompatible_listing_flag_before_client_creation(
+    argv, monkeypatch, capsys
+):
+    monkeypatch.setattr(
+        cli,
+        "ReadClient",
+        lambda: pytest.fail("tag grammar validation must run before client creation"),
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(argv)
+
+    assert raised.value.code == 1
+    assert "error:" in capsys.readouterr().err
+
+
+def test_posts_tag_handler_forwards_the_tag_without_a_sort_control(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    client = FakeClient()
+    calls = []
+
+    def retrieve(received_client, *received_args, **received_kwargs):
+        calls.append((received_client, received_args, received_kwargs))
+        return RetrieveResult([], "no_matches", requests_made=1)
+
+    output = tmp_path / "tag.json"
+    monkeypatch.setattr(cli, "ReadClient", lambda: client)
+    monkeypatch.setattr(cli, "fetch_posts", retrieve)
+
+    assert cli.main(["posts", "blog", "--tag", "coffee", "--output", str(output)]) == 0
+    assert calls == [
+        (
+            client,
+            ("blog",),
+            {
+                "category": 0,
+                "sort": "recent",
+                "notices": False,
+                "query": None,
+                "tag": "coffee",
+                "limit": None,
+                "raw": False,
+            },
+        )
+    ]
+    assert json.loads(output.read_text()) == []
+    assert "0 posts" in capsys.readouterr().err
 
 
 def test_phase4_post_handler_accepts_two_tokens_and_forwards_comment_options(

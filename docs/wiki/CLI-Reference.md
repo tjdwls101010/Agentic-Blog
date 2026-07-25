@@ -56,7 +56,9 @@ Reads one public blog profile and category tree, producing one `Blog` record. It
 
 ### `post POST_REF [LOG_NO]`
 
-Reads one public post, its rendered Markdown body, and comments by default, producing one `Post` record.
+Reads one public post, its rendered Markdown body, its hashtags, and comments by default, producing one `Post` record.
+
+`tags` costs one extra request, taken from the same budget: it is `null` when the budget ran out before it and an empty array when the post genuinely carries no tags. No listing command populates it.
 
 `POST_REF` may be a `blog.naver.com/<id>/<logNo>` or `m.blog.naver.com/...` URL, a `PostView.naver?blogId=…&logNo=…` URL, or a blog ID when `LOG_NO` is supplied separately. A bare post number is not sufficient because post numbers are only unique within a blog.
 
@@ -78,8 +80,11 @@ Lists a blog's public posts. These are listing-shaped `Post` records: `brief` ma
 | `--sort {recent,popular}` | Listing order; default `recent`. |
 | `--notices` | List pinned notice posts instead of the chronological list. |
 | `--query TEXT` | Search posts within this blog using Naver's in-blog search API. Text must be non-empty after trimming. |
+| `--tag TEXT` | List this blog's posts filed under one tag, using Naver's in-blog tag search. Text must be non-empty after trimming. |
 
-`--notices` cannot be combined with `--sort popular`; neither `--notices` nor `--sort popular` can be combined with nonzero `--category`. `--query` cannot be combined with nonzero `--category` or `--sort popular`, and not with `--notices`.
+`--notices` cannot be combined with `--sort popular`; neither `--notices` nor `--sort popular` can be combined with nonzero `--category`. `--query` cannot be combined with nonzero `--category` or `--sort popular`, and not with `--notices` or `--tag`. `--tag` carries the same exclusions as `--query`.
+
+`--tag` takes no sort of its own. Naver's in-blog tag search answers in date order whatever sort is requested, so no sort parameter is sent. Its pages carry 30 posts where `--query` carries 20, and the page total it reports is computed against a page size it does not use, so paging stops on a short page rather than on that figure.
 
 `--type tag` returns a leaner card than `--type post`: `blog_no`, `blog_name`, and `category_name` are null because Naver's tag index does not carry them. `blog_id`, `log_no`, `url`, `nickname`, `created_at`, `comment_count`, and `like_count` are all present, so chaining into `post` or `blog` works unchanged.
 

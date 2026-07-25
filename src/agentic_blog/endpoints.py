@@ -20,6 +20,7 @@ MOBILE = "https://m.blog.naver.com/api/blogs/"
 MOBILE_HTML = "https://m.blog.naver.com/"
 MOBILE_SEARCH_POST = "https://m.blog.naver.com/api/search/v1/post"
 MOBILE_TAG_SEARCH = "https://m.blog.naver.com/api/tags/search/post"
+BLOG_TAG_LIST_INFO = "https://blog.naver.com/BlogTagListInfo.naver"
 CBOX = "https://apis.naver.com/commentBox/cbox/"
 CBOX_LIST = f"{CBOX}web_naver_list_json.json"
 CBOX_POOL = "blogid"  # Other guessed pools return code 3300.
@@ -216,6 +217,16 @@ def post_html(blog_id: str | BlogRef | PostRef, log_no: str | int | None = None)
     return RequestSpec(url=f"{MOBILE_HTML}{post_ref.blog_id}/{post_ref.log_no}", params={})
 
 
+def post_tags(blog_id: str | BlogRef | PostRef, log_no: str | int | None = None) -> RequestSpec:
+    """Build the PC-host ``BlogTagListInfo.naver`` request."""
+    post_ref = parse_post_ref(blog_id, log_no)
+    _positive_decimal(post_ref.log_no, "post log number")
+    return RequestSpec(
+        url=BLOG_TAG_LIST_INFO,
+        params={"blogId": post_ref.blog_id, "logNo": post_ref.log_no, "viewType": "S"},
+    )
+
+
 def comments_info(blog_id: str | BlogRef | PostRef, log_no: str | int | None = None) -> RequestSpec:
     """Build the MOBILE ``comments-info`` request."""
     post_ref = parse_post_ref(blog_id, log_no)
@@ -350,6 +361,17 @@ def in_blog_search(
     return RequestSpec(
         url=_mobile_url(blog_id, "search/post"),
         params={"query": query, "sortType": sort, "page": page},
+    )
+
+
+def in_blog_tag_search(blog_id: str | BlogRef, query: str, *, page: int = 1) -> RequestSpec:
+    """Build a mobile in-blog tag-search request."""
+    query = _required_text(query, "search query")
+    _positive_int(page, "page")
+    # This endpoint ignores sortType and always reports date order, so no sort is offered.
+    return RequestSpec(
+        url=_mobile_url(blog_id, "search/tag"),
+        params={"query": query, "page": page},
     )
 
 

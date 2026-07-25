@@ -24,16 +24,32 @@ BODY = (Path(__file__).parent / "fixtures" / "body_se_one.html").read_text()
 
 
 class FakeClient:
-    def __init__(self, pages, *, remaining_requests=100):
+    def __init__(self, pages, *, remaining_requests=100, tag_payload="default"):
         self.pages = iter(pages)
         self.specs = []
         self.requests_made = 0
         self.remaining_requests = remaining_requests
+        self.tag_payload = tag_payload
 
     def get_json(self, spec):
         self.specs.append(spec)
         self.requests_made += 1
         self.remaining_requests -= 1
+        if spec.url.endswith("BlogTagListInfo.naver"):
+            return (
+                self.tag_payload
+                if self.tag_payload != "default"
+                else {
+                    "taglist": [
+                        {
+                            "msg": "",
+                            "logno": spec.params["logNo"],
+                            "tagName": "synthetic",
+                            "encTagName": "",
+                        }
+                    ]
+                }
+            )
         return next(self.pages)
 
     def get_text(self, spec):
@@ -85,6 +101,15 @@ def mpage(items):
             "totalPage": 411_872,
         },
     }
+
+
+def tag_mpage(items):
+    """One measured in-blog tag-search page."""
+    payload = deepcopy(
+        json.loads((Path(__file__).parent / "fixtures/in_blog_tag_search.json").read_text())
+    )
+    payload["result"]["list"] = items
+    return payload
 
 
 def page(items, *, count=7):
@@ -646,7 +671,7 @@ def test_fetch_post_composes_body_comments_and_never_requests_telemetry():
 
     post = result.items[0]
     assert result.stop_reason == "single_target"
-    assert result.requests_made == 3
+    assert result.requests_made == 4
     assert post.url == "https://blog.naver.com/synthetic_alice/10001"
     assert post.title == "합성 댓글 예시"
     assert post.body
@@ -656,6 +681,7 @@ def test_fetch_post_composes_body_comments_and_never_requests_telemetry():
         "https://m.blog.naver.com/synthetic_alice/10001",
         "https://m.blog.naver.com/api/blogs/synthetic_alice/posts/10001/comments-info",
         "https://apis.naver.com/commentBox/cbox/web_naver_list_json.json",
+        "https://blog.naver.com/BlogTagListInfo.naver",
     ]
     assert all("telemetry" not in spec.url for spec in client.specs)
 
@@ -681,7 +707,7 @@ def test_fetch_post_rebuilds_measured_flat_cbox_pages_into_a_tree():
 
     assert len(result.items[0].comments) == 1
     assert result.items[0].comments[0].replies[0].comment_no == "90002"
-    assert result.requests_made == 4
+    assert result.requests_made == 5
 
 
 def _flat_cbox_page(cards, *, page, total_pages, count):
@@ -712,7 +738,7 @@ def test_fetch_post_comment_limit_waits_for_later_page_replies():
         comment_limit=1,
     )
 
-    assert result.requests_made == 4
+    assert result.requests_made == 5
     assert [comment.comment_no for comment in result.items[0].comments] == ["90001"]
     assert result.items[0].comments[0].replies[0].comment_no == "90002"
 
@@ -813,7 +839,7 @@ def test_fetch_post_waits_for_a_later_page_grandchild_before_limiting_roots():
         comment_limit=1,
     )
 
-    assert result.requests_made == 4
+    assert result.requests_made == 5
     assert result.items[0].comments[0].replies[0].replies[0].comment_no == "90004"
 
 
@@ -831,7 +857,7 @@ def test_fetch_post_stops_early_for_a_recursively_complete_selected_root():
     )
 
     assert result.stop_reason == "single_target"
-    assert result.requests_made == 3
+    assert result.requests_made == 4
     assert result.items[0].comments[0].replies[0].comment_no == "90002"
 
 
@@ -849,7 +875,7 @@ def test_fetch_post_allows_unresolved_unselected_replies_before_early_limit_comp
     )
 
     assert result.stop_reason == "single_target"
-    assert result.requests_made == 3
+    assert result.requests_made == 4
     assert [comment.comment_no for comment in result.items[0].comments] == ["90001"]
 
 
@@ -941,7 +967,7 @@ def test_fetch_post_uses_favorite_cbox_sort_and_deduplicates_cross_page_cards():
     result = fetch_post(client, "synthetic_alice", 10001, comment_sort="favorite")
 
     assert [comment.comment_no for comment in result.items[0].comments] == ["90001", "90003"]
-    assert [spec.params["sort"] for spec in client.specs[2:]] == ["FAVORITE", "FAVORITE"]
+    assert [spec.params["sort"] for spec in client.specs[2:-1]] == ["FAVORITE", "FAVORITE"]
 
 
 def test_fetch_post_omits_cbox_for_no_comments_zero_limit_and_reserved_budget():
@@ -959,10 +985,49 @@ def test_fetch_post_omits_cbox_for_no_comments_zero_limit_and_reserved_budget():
     assert no_comments.items[0].comments is None
     assert zero_limit.items[0].comments == []
     assert zero_total.items[0].comments == []
-    assert no_comments.requests_made == zero_limit.requests_made == zero_total.requests_made == 2
+    assert no_comments.requests_made == zero_limit.requests_made == zero_total.requests_made == 3
     assert budget.items == []
     assert budget.stop_reason == "max_requests"
     assert budget.requests_made == 0
+
+
+def test_fetch_post_populates_decoded_tags_from_the_separate_post_endpoint() -> None:
+    tag_payload = {
+        "taglist": [
+            {
+                "msg": "",
+                "logno": "10001",
+                "tagName": "%ED%95%9C%EA%B8%80,coffee",
+                "encTagName": "%C7%D1%B1%DB",
+            }
+        ]
+    }
+    client = FakeClient([BODY, PHASE4["comments_info"]], tag_payload=tag_payload)
+
+    result = fetch_post(client, "synthetic_alice", 10001, comments=False)
+
+    assert result.items[0].tags == ["한글", "coffee"]
+    assert client.specs[2].url == "https://blog.naver.com/BlogTagListInfo.naver"
+
+
+def test_fetch_post_distinguishes_unfetched_tags_from_a_measured_empty_list() -> None:
+    unfetched = fetch_post(
+        FakeClient([BODY, PHASE4["comments_info"]], remaining_requests=2),
+        "synthetic_alice",
+        10001,
+        comments=False,
+    )
+    empty = fetch_post(
+        FakeClient([BODY, PHASE4["comments_info"]], tag_payload={"taglist": []}),
+        "synthetic_alice",
+        10001,
+        comments=False,
+    )
+
+    assert unfetched.items[0].tags is None
+    assert unfetched.stop_reason == "max_requests"
+    assert empty.items[0].tags == []
+    assert empty.stop_reason == "single_target"
 
 
 def _post_search_html(log_nos):
@@ -1010,6 +1075,34 @@ def test_fetch_posts_query_supports_raw_now_that_the_source_is_json():
 )
 def test_fetch_posts_query_rejects_listing_variants(kwargs):
     with pytest.raises(ValueError, match="query"):
+        fetch_posts(FakeClient([]), "blog", **kwargs)
+
+
+def test_fetch_posts_tag_paginates_at_thirty_and_ignores_bogus_total_page() -> None:
+    first = [mpost(value) for value in range(30)]
+    client = FakeClient([tag_mpage(first), tag_mpage([mpost(30)])])
+
+    result = fetch_posts(client, "blog", tag="coffee")
+
+    assert len(result.items) == 31
+    assert result.stop_reason == "no_next_page"
+    assert [spec.params["page"] for spec in client.specs] == [1, 2]
+    assert all(spec.url.endswith("/search/tag") for spec in client.specs)
+    assert all("sortType" not in spec.params for spec in client.specs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"tag": ""},
+        {"tag": "q", "query": "q"},
+        {"tag": "q", "category": 1},
+        {"tag": "q", "sort": "popular"},
+        {"tag": "q", "notices": True},
+    ],
+)
+def test_fetch_posts_tag_rejects_every_incompatible_listing_variant(kwargs) -> None:
+    with pytest.raises(ValueError, match="tag"):
         fetch_posts(FakeClient([]), "blog", **kwargs)
 
 
@@ -1107,3 +1200,44 @@ def test_fetch_blog_leaves_buddy_count_unset_rather_than_failing_on_a_spent_budg
     assert result.items[0].post_count is not None
     assert result.items[0].buddy_count is None
     assert len(client.specs) == 2
+    assert result.stop_reason == "max_requests"
+
+
+def test_fetch_blog_accepts_a_blog_url_by_normalizing_it_before_search_and_match() -> None:
+    profile_node = {
+        "blogNo": "20001",
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogName": "Synthetic Alice",
+        "nickName": "Synthetic Alice",
+    }
+    client = FakeClient(
+        [
+            page([profile_node], count=10),
+            PHASE3["category_list"],
+            PHASE3["public_buddies"],
+        ]
+    )
+
+    result = fetch_blog(client, "https://blog.naver.com/synthetic_alice")
+
+    assert result.items[0].blog_id == "synthetic_alice"
+    assert client.specs[0].params["keyword"] == "synthetic_alice"
+
+
+def test_fetch_blog_with_exactly_two_requests_reports_max_requests() -> None:
+    profile_node = {
+        "blogNo": "20001",
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogName": "Synthetic Alice",
+        "nickName": "Synthetic Alice",
+    }
+    result = fetch_blog(
+        FakeClient(
+            [page([profile_node], count=10), PHASE3["category_list"]],
+            remaining_requests=2,
+        ),
+        "synthetic_alice",
+    )
+
+    assert result.items[0].buddy_count is None
+    assert result.stop_reason == "max_requests"

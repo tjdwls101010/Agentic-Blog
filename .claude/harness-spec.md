@@ -43,14 +43,14 @@ Naver products (카페/지식iN/뉴스/포스트/쇼핑/플레이스), and devel
 | B4 | Every read writes a JSON **file**; stdout carries nothing. Always pass `--output`, then `Read` | skill | naver-blog | generated |
 | B5 | Output is a **bare JSON array** — no envelope; single-target reads return a one-element list | skill | naver-blog | generated |
 | B6 | **`brief` is not `body`** — listings populate `brief` and null `body`; only `post` fetches real text. The skill's primary failure mode | skill | naver-blog | generated |
-| B7 | `comment_count` is the true total; `comments[]` is only what this call fetched | skill | naver-blog | generated |
+| B7 | `comment_count` is the true total; `comments[]` is only what this call fetched. **Corrected 2026-07-26:** the total counts replies while the array holds only top-level threads with replies nested, so the two differ on almost any post with discussion *before* a `--comment-limit` is involved, and the limit bounds threads rather than comments | skill | naver-blog | generated |
 | B8 | `visibility` arrives on listings, never on a single `post` read | skill | naver-blog | generated |
 | B9 | `created_at` is null on `post` when Naver labelled the post relatively ("7시간 전"); the listing surfaces carry an exact time | skill | naver-blog | generated |
 | B10 | Handles for chaining; `author_blog_id` is the edge from a post into the commenter's blog; a `log_no` alone is not a post reference | skill | naver-blog | generated |
 | B11 | The **category tree is a blog's best one-shot summary** — `blog` before `posts` | skill | naver-blog | generated |
 | B12 | `posts --query` for in-blog search, rather than listing everything and filtering in-model | skill | naver-blog | generated |
 | B13 | Empty `buddies` is ordinary, not an error | skill | naver-blog | generated |
-| B14 | `stop_reason` semantics; `max_requests` means partial, not finished | skill | naver-blog | generated |
+| B14 | `stop_reason` semantics; `max_requests` means partial, not finished. **Corrected 2026-07-26:** the file had listed `single_target` among the reasons that mean "genuinely the end". `fetch_post` returns it whether the thread came back whole, `--comment-limit` truncated it, or `--no-comments` skipped it, so it asserts that one target resolved and nothing about completeness. Also records which *part* of a `max_requests` result is partial, since a `post` keeps a usable body | skill | naver-blog | generated |
 | B15 | Cost model: 0.5s floor, 100-request budget. Bound fan-out **and report the shape actually covered** — a sampled answer presented as complete is wrong | skill | naver-blog | generated |
 | B16 | Sponsored content is pervasive and **Naver publishes no `is_ad` field**. It does publish the opposite claim — `isBuyWithMyOwnMoney`, surfaced as `search --self-purchased` — but that is the **blogger's self-declaration**, so it narrows the pool without cleaning it, and its absence means almost nothing. Judgment stays the instrument, and an invisible judgment is uncheckable | skill | naver-blog | generated |
 | B20 | `buddy_count` counts only **disclosed** neighbours; `0` means "publishes no list", not "has none" — Naver's private total is routinely orders of magnitude larger | skill | naver-blog | generated |
@@ -59,6 +59,8 @@ Naver products (카페/지식iN/뉴스/포스트/쇼핑/플레이스), and devel
 | B17 | Exit-code handling; **there is no exit 2**, unlike every sibling | skill | naver-blog | generated |
 | B18 | The unobserved region (이웃공개 / deleted / private / suspended) is labelled unobserved rather than diagnosed | skill | naver-blog | generated |
 | B19 | No writes exist; no `crawl`; keep captures out of the repo because it tracks `.json` fixtures | skill | naver-blog | generated |
+| B23 | **Tags are the only edge running outward from a post's content rather than its author** — the platform's own "related posts". A post's tags are better queries than guessed ones because a human who knew the topic chose them, and the same tag asked globally and asked inside the blog are two different questions. Only a `post` read fills them in. `tags: null` (not fetched) vs `[]` (measured none) is a distinction to preserve, not collapse | skill | naver-blog | 0.3.0 |
+| B24 | **Pick the axis, not just the command.** Criteria — not flag tables — for: whole text vs tags; finding a blog vs resolving an id; relevance vs recency, and why server-side date bounds beat a bigger `--limit` against the ~1,000 ceiling; the four in-blog surfaces (text, tag, category, popularity, notices — the notice being where disclosures and self-description live); and how much of a comment thread to fetch and in which order. These were capabilities the CLI had all along that the skill gave the model no criterion for choosing between | skill | naver-blog | 0.3.0 |
 
 ## Layer routing
 
@@ -208,3 +210,47 @@ the PyPI simple index, which is what keeps it correct across releases like these
   really issues. Scenario 11 hit it mid-task and reported it in its own answer. Offline tests could
   not have caught it — none named the rule, and removing it broke nothing. This is the concrete
   case for why `validate_harness.py` passing is not evidence the harness works.
+
+- **2026-07-26** — Review arc, shipped as **v0.3.0**. Findings and measurements in
+  `docs/plan/15-tag-loop-and-body-loss.md`. Two of the four package defects were found by an
+  independent second-model review of the source, one by reading what a builder could assign, and one
+  by running the CLI against a pasted URL; the skill's own factual error was found the same way and
+  is the reason this entry exists.
+
+  **B23 and B24 added; B7 and B14 corrected. The skill still hardcodes no version.**
+
+  **B14 was wrong, and wrong in the direction that matters.** It listed `single_target` among the
+  stop reasons that mean "genuinely the end". `fetch_post` returns it whether the comment thread came
+  back whole, `--comment-limit` truncated it, or `--no-comments` skipped it — so a model that bounded
+  a thread and then read `single_target` would report a partial discussion as the complete one, with
+  nothing in the output to contradict it. The skill now says what the reason actually asserts, which
+  is that one target resolved. B7 was imprecise in the same area for a different reason:
+  `comment_count` includes replies while `comments[]` holds only top-level threads, so the two differ
+  before any flag of the model's is involved.
+
+  **B24 is the larger gap and it was a gap of omission.** The CLI has always offered a sort axis,
+  server-side date bounds, a blog-versus-id distinction, a comment sort, and four separate in-blog
+  listing surfaces. The skill named almost none of them, so the model met those decisions with no
+  criterion — while the file spent words on history and on restating an exit-code table `catalog`
+  already generates. The revision trades the second for the first: inert claims and contract
+  duplication out, decision criteria in. Notices are called out specifically, because a pinned notice
+  is where disclosures and self-description live and is unusually informative for one request.
+
+  **B23 exists because the package finally closed a loop it opened in 0.2.0.** `--type tag` could
+  find posts by a tag; nothing could report the tags a post carried, so a good post could not lead to
+  its neighbours. `12-…` §2.5 had recorded post tags as unverified after finding no tag markup in the
+  post HTML — a correct observation that supported a conclusion slightly too broad, since Naver serves
+  them from a separate endpoint. Measured on 82 posts this session.
+
+  **One package defect was found by the pre-release sweep and predates every release** — the same
+  pattern as 0.2.0's unpaired-surrogate crash. A neighbour with no posts carries `updateTime: null`,
+  which `parse_buddies` required to be a string, so `buddies` **and** `blog` both exited 4 on 1 of 30
+  sampled blogs. Nothing consumes the field. 0.2.0 made `blog` read that endpoint for `buddy_count`
+  and thereby doubled what a drift there could break, which nobody noticed at the time.
+
+  **The adversarial review of the implementation was worth more than the review that produced it.**
+  A second model, asked to break the finished diff rather than to approve it, found that `fetch_post`
+  had reproduced exactly the stop-reason defect the same diff was fixing in `fetch_blog`, that a
+  video's thumbnail was being published as the video's own URL, and that a test had been written to
+  lock the first of those in. It also raised one finding that measurement disproved — 387 of 387 real
+  components carry exactly one family class, so the parser's branch chain is sound.
