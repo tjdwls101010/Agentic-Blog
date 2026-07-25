@@ -1,0 +1,34 @@
+# Exact development dependency pins for the planned macOS and Ubuntu Python 3.12 CI matrix.
+# This is a constraints file, not a hash-enforced lock: wheel hashes vary by platform.
+# Published runtime requirements and the supported Python range remain in pyproject.toml.
+anyio==4.14.1
+attrs==26.1.0
+build==1.5.0
+certifi==2026.6.17
+cfgv==3.5.0
+distlib==0.4.3
+filelock==3.29.5
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+identify==2.6.19
+idna==3.18
+iniconfig==2.3.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+lxml==5.3.2
+nodeenv==1.10.0
+packaging==26.2
+platformdirs==4.10.0
+pluggy==1.6.0
+pre-commit==4.6.0
+pygments==2.20.0
+pyproject-hooks==1.2.0
+pytest==9.1.1
+python-discovery==1.4.3
+pyyaml==6.0.3
+referencing==0.37.0
+rpds-py==2026.6.3
+ruff==0.15.20
+typing-extensions==4.16.0
+virtualenv==21.5.1

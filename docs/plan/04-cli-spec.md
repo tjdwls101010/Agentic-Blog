@@ -8,8 +8,7 @@ exits **1** (not argparse's 2 — exit 2 is reserved, see the table below).
 
 ### Offline meta commands (no network, no setup)
 
-- **`catalog`** — machine-readable description of the whole CLI, generated from the parser.
-  Flag: `--json` (no-op; always JSON).
+- **`catalog`** — machine-readable description of the whole CLI, generated from the parser and emitted as JSON.
 - **`schema`** — the output object schema. Flag: `--json` (JSON Schema draft 2020-12).
 
 There is **no `login`, `setup`, `status`, or `doctor`.** See `03-architecture.md` — nothing is
@@ -52,10 +51,15 @@ stateful, so there is nothing to configure or diagnose.
 
 - **`buddies <blogId>`** — that blog's public neighbours (이웃). → `Blog`.
 
-### Common read flags (shared argparse group)
+### Read flags and applicability
 
-`--format {json,ndjson}` (default `json`), `--output PATH`, `--limit N` (default unbounded),
-`--data-dir PATH`, `--raw`, `--no-redact`, `-v/--verbose`.
+`--format {json,ndjson}` (default `json`), `--output PATH`, and `--data-dir PATH` apply to every
+implemented read command. `--limit N` applies only to paginating or bounded-list commands
+(`search`, `posts`, `buddies`, and `topic`), not the fixed-result `blog` or `topics` commands.
+`--raw` applies only where the output model preserves a raw upstream object (`search`, `blog`,
+`posts`, `buddies`, and `topic`); `Topic` has no raw field, so `topics --raw` is rejected.
+`--no-redact` and `-v/--verbose` are exposed only when their Phase 5 diagnostic behavior is
+implemented; accepting them earlier as no-ops is prohibited.
 
 `--output` default naming: `<command>-<safe_identifier>-<YYYYMMDDTHHMMSSffffffZ>.<json|ndjson>`
 under `<platform user data>/agentic-blog/output/`. Non-alphanumeric runs in the identifier become
@@ -73,17 +77,16 @@ headers exist to wait on).
 - JSON is written with `ensure_ascii=False`, UTF-8, so Korean text stays readable in the file.
 - Summary format: `"{N} posts, range {oldest}..{newest}, stop reason: {reason}. Saved to {path}"`
   (`{N} blogs, …` / `{N} topics, …` for the other output objects).
-- `--raw` attaches the raw upstream node per object (redacted unless `--no-redact`, which prints a
-  warning). Debug only.
+- `--raw` attaches the raw upstream node per object without mutating result data. `--no-redact`
+  applies only to diagnostic messages and prints a warning; it never changes result files.
 - Only in summaries, C0/DEL characters in the output path are rendered as `\xNN`; the real
   filesystem path is unchanged.
 
 ## `stop_reason` vocabulary (in the stderr summary)
 
-- `limit_reached` — `--limit` stopped it; there is more.
+- `limit_reached` — `--limit` stopped collection after another distinct record was observed; a full page alone means another page may exist. A zero limit stops before requests.
 - `no_next_page` — genuinely the end (a page returned fewer items than requested).
 - `no_matches` — a search with zero hits (real; report as such, do not treat as an error).
-- `since_crossed` — the `--since` boundary was reached.
 - `max_requests` — stopped by the per-run request budget.
 - `single_target` — the command returns exactly one object and does not paginate
   (`blog`, `post`, `topics`).
@@ -96,7 +99,7 @@ a real throttling signature, add it then — with the measured evidence recorded
 
 | Code | Meaning |
 |---|---|
-| 0 | success (limit met / date window reached / listing exhausted / zero matches) |
+| 0 | success (limit met / listing exhausted / zero matches) |
 | 1 | usage error, invalid identifier, or unexpected failure |
 | 3 | blocked or throttled by Naver (HTTP 429, or the block signature found in Phase 0 Q-1) |
 | 4 | Naver's response no longer matches expectations — envelope parse failure, or the post-body / in-blog-search HTML structure changed. Fix: upgrade. |
@@ -108,8 +111,8 @@ keeps the family's exit codes readable side by side and means a `2` from this to
 unambiguously a bug, not a re-purposed condition.
 
 There is no exit 7 (`--since` unconfirmed): date filtering is **server-side** here
-(`02-recon-findings.md` §3.1), so a `--since` request either returns in-range results or fails
-outright.
+(`02-recon-findings.md` §3.1), so it returns in-range results or fails outright; it does not create
+a local boundary-crossing stop reason.
 
 ## Typed errors (`errors.py`, base `AgenticBlogError`)
 

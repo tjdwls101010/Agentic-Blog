@@ -114,9 +114,11 @@ Bump to `0.1.0` in both `pyproject.toml` and `__init__.py`.
 
 **Verify:** the full offline suite is green across all three `lint-and-test` legs; the sdist-first
 smoke is green on both OS legs; a broad **live e2e pass** exercises every command and every flag
-against public blogs (documented, outputs deleted, no PII committed); a neighbour-only post and a
-nonexistent blog both exit 5 with a message that says which; both version declarations read
-`0.1.0`. No tag is created in this phase.
+against public blogs (documented, outputs deleted, no PII committed); a nonexistent blog exits 5.
+A neighbour-only target may be asserted as such only if Phase 0 has measured a safe anonymous
+signature; otherwise the client must preserve the conservative unavailable/no-inference policy
+rather than fabricate a reason. Both version declarations read `0.1.0`. No tag is created in this
+phase.
 
 ## Phase 6 — Publish
 

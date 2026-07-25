@@ -3,17 +3,24 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Build artifacts
 build/
 dist/
+*.whl
 
-# Local browser and captured blog data
+# Local captures and generated output
 scratch/
 *.raw.json
+*.raw.html
+# Synthetic fixtures remain tracked; do not add blanket JSON or HTML ignores.
 output/
-profiles/
-browsers/
 
 # Virtual environments
 .venv/

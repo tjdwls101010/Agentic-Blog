@@ -1,3 +1,3 @@
-"""Agentic Blog — an agentic crawler for blogs (work in progress)."""
+"""Tools for reading public Naver Blog content."""
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"

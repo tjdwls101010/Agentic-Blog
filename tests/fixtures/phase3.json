@@ -1,0 +1,187 @@
+{
+  "category_list": {
+    "isSuccess": true,
+    "result": {
+      "mylogCategoryList": [
+        {
+          "categoryNo": 7,
+          "categoryName": "Synthetic Notes",
+          "parentCategoryNo": null,
+          "postCnt": 1,
+          "openYN": true,
+          "categoryType": "B",
+          "divisionLine": false,
+          "childCategory": false,
+          "directorySeq": 5,
+          "categoryBlocked": false
+        }
+      ],
+      "memologCategoryList": [],
+      "mylogPostCount": 1,
+      "memologPostCount": 0
+    }
+  },
+  "post_list": {
+    "isSuccess": true,
+    "result": {
+      "categoryNo": 7,
+      "categoryName": "Synthetic Notes",
+      "items": [
+        {
+          "logNo": 10001,
+          "blogNo": 20001,
+          "domainIdOrBlogId": "synthetic_alice",
+          "titleWithInspectMessage": "Synthetic coffee note",
+          "briefContents": "A synthetic example post.",
+          "addDate": 1767225600000,
+          "categoryNo": 7,
+          "categoryName": "Synthetic Notes",
+          "commentCnt": 0,
+          "sympathyCnt": 0,
+          "shareCnt": 0,
+          "thumbnailUrl": "https://media.example.invalid/posts/10001.jpg",
+          "thumbnailList": [
+            {
+              "type": "IMAGE",
+              "encodedThumbnailUrl": "https://media.example.invalid/posts/10001.jpg",
+              "videoAniThumbnailUrl": "",
+              "videoPlayTime": null,
+              "isPortraitThumbnail": false,
+              "videoThumbnail": false,
+              "vrthumbnail": false
+            }
+          ],
+          "thumbnailCount": 1,
+          "smartEditorVersion": 4,
+          "readCount": null,
+          "allOpenPost": true,
+          "buddyOpen": false,
+          "bothBuddyOpen": false,
+          "notOpen": false
+        }
+      ],
+      "page": 1,
+      "totalCount": 0
+    }
+  },
+  "notice_post_list": {
+    "isSuccess": true,
+    "result": {
+      "noticePostViewList": [
+        {
+          "logNo": 10002,
+          "blogNo": 20001,
+          "domainIdOrBlogId": "synthetic_alice",
+          "titleWithInspectMessage": "Synthetic notice",
+          "thumbnailUrl": "https://media.example.invalid/posts/10002.jpg"
+        }
+      ]
+    }
+  },
+  "popular_post_list": {
+    "isSuccess": true,
+    "result": {
+      "popularPostList": [
+        {
+          "blogId": "synthetic_alice",
+          "logNo": 10003,
+          "titleWithInspectMessage": "Synthetic popular post",
+          "briefContents": "A synthetic popular post.",
+          "addDate": 1767398400000,
+          "categoryNo": 7,
+          "categoryName": "Synthetic Notes",
+          "commentCnt": 0,
+          "sympathyCnt": 0,
+          "shareCnt": 0,
+          "thumbnailUrl": "https://media.example.invalid/posts/10003.jpg",
+          "thumbnailList": [
+            {
+              "type": "IMAGE",
+              "encodedThumbnailUrl": "https://media.example.invalid/posts/10003.jpg",
+              "videoAniThumbnailUrl": "",
+              "videoPlayTime": null,
+              "isPortraitThumbnail": false,
+              "videoThumbnail": false,
+              "vrthumbnail": false
+            }
+          ],
+          "thumbnailCount": 1,
+          "smartEditorVersion": 4,
+          "readCount": null,
+          "allOpenPost": true,
+          "buddyOpen": false,
+          "bothBuddyOpen": false,
+          "notOpen": false
+        }
+      ]
+    }
+  },
+  "public_buddies": {
+    "isSuccess": true,
+    "result": {
+      "blogId": "synthetic_alice",
+      "nickName": "Synthetic Alice",
+      "totalMyBuddyCount": 1,
+      "totalPublicBuddyCount": 1,
+      "totalPageCount": 1,
+      "currentPage": 1,
+      "buddyList": [
+        {
+          "blogId": "synthetic_bob",
+          "blogName": "Synthetic Bob Blog",
+          "nickName": "Synthetic Bob",
+          "linkUrl": "https://example.invalid/synthetic_bob",
+          "blogProfileImage": "https://media.example.invalid/profiles/synthetic_bob.jpg",
+          "blogNo": 20002,
+          "updateTime": "8 minutes ago"
+        }
+      ]
+    }
+  },
+  "directory_list": {
+    "result": [
+      {
+        "name": "Synthetic Group",
+        "directoryList": [
+          {"name": "Synthetic Topic", "sortNo": 1, "seq": 5}
+        ]
+      }
+    ]
+  },
+  "directory_post_list": {
+    "result": {
+      "totalCount": 1,
+      "postList": [
+        {
+          "domainIdOrBlogId": "synthetic_alice",
+          "blogNo": 20001,
+          "nickname": "Synthetic Alice",
+          "blogUrl": "https://example.invalid/synthetic_alice",
+          "logNo": 10001,
+          "title": "Synthetic directory post",
+          "postUrl": "https://example.invalid/synthetic_alice/10001",
+          "briefContents": "A synthetic directory listing.",
+          "profileImage": "https://media.example.invalid/profiles/synthetic_alice.jpg"
+        }
+      ]
+    }
+  },
+  "directory_top_post_list": {
+    "result": [
+      {
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogNo": 20001,
+        "logNo": 10003,
+        "nickname": "Synthetic Alice",
+        "profileImage": "https://media.example.invalid/profiles/synthetic_alice.jpg",
+        "title": "Synthetic top post",
+        "postUrl": "https://example.invalid/synthetic_alice/10003",
+        "briefContents": "A synthetic top listing.",
+        "directorySeq": 0,
+        "thumbnailUrl": "https://media.example.invalid/posts/10003.jpg",
+        "gdid": "90000003_10003",
+        "isMarketPost": false
+      }
+    ]
+  }
+}

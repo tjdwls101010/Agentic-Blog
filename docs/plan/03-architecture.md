@@ -103,8 +103,9 @@ populated by `post`**), `captured_at` (when *you* scraped — not an event time)
 
 Schema is **generated from the code** (`schema_fields()` anchored on `to_dict()` output,
 `json_schema()` draft 2020-12), never hand-written — so `agentic-blog schema --json` cannot drift.
-`test_model.py` validates real fixtures against the generated schema with a format-aware
-draft 2020-12 validator.
+`test_model.py` validates repository synthetic fixtures against the generated schema with a
+format-aware draft 2020-12 validator. Live checks assert shapes only and persist no captures,
+consistent with the privacy policy.
 
 ### Normalisation rules the model owns
 
