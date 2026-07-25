@@ -1,0 +1,23 @@
+{
+  "result": {
+    "searchDisplayInfo": {
+      "authUrlType": "LOGIN",
+      "query": "합성 커피"
+    },
+    "searchList": [
+      {
+        "domainIdOrBlogId": "synthetic_alice",
+        "logNo": "10001",
+        "postUrl": "https://example.invalid/synthetic_alice/10001",
+        "title": "<strong class=\"search_keyword\">합성</strong> 커피 기록",
+        "contents": "손으로 작성한 <strong class=\"search_keyword\">합성</strong> 한국어 예시입니다.",
+        "addDate": 1767225600000,
+        "blogName": "합성 앨리스의 기록",
+        "nickName": "가상앨리스",
+        "gdid": "synthetic-gdid-10001"
+      }
+    ],
+    "totalCount": 1,
+    "pagePerCount": 7
+  }
+}

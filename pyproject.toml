@@ -4,29 +4,48 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-blog"
-version = "0.0.1"
-description = "Agentic Blog — an agentic crawler for blogs (work in progress)."
+version = "0.1.0"
+description = "Read public Naver Blog content with a small, agent-friendly CLI."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "seongjin" }]
-keywords = ["blog", "crawler", "agent", "agentic"]
+keywords = ["naver", "blog", "crawler", "agentic"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+dependencies = [
+    "httpx>=0.27",
+    "platformdirs>=4.0",
+    "lxml>=5.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8", "pre-commit>=3.8", "build>=1.2", "jsonschema>=4.0"]
+
+[project.scripts]
+agentic-blog = "agentic_blog.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/tjdwls101010/Agentic-Blog"
-Repository = "https://github.com/tjdwls101010/Agentic-Blog"
 Issues = "https://github.com/tjdwls101010/Agentic-Blog/issues"
+Changelog = "https://github.com/tjdwls101010/Agentic-Blog/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentic_blog"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

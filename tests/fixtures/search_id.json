@@ -1,0 +1,19 @@
+{
+  "result": {
+    "searchDisplayInfo": {
+      "query": "synthetic_alice"
+    },
+    "searchList": [
+      {
+        "blogNo": "20002",
+        "domainIdOrBlogId": "synthetic_bora",
+        "blogName": "합성 보라의 메모",
+        "nickName": "가상보라",
+        "blogDesc": "가상 식별자 검색용으로 만든 한국어 설명입니다.",
+        "profileImgUrl": "https://example.invalid/synthetic_bora.png"
+      }
+    ],
+    "totalCount": 1,
+    "pagePerCount": 10
+  }
+}

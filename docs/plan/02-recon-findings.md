@@ -376,3 +376,151 @@ Everything load-bearing is closed. What remains is measurement, not discovery:
   fails: a typed drift error, or a documented degradation.
 - **Q-5 — `orderBy` values.** `sim` and `date` are confirmed for search; `recentdate` is used by
   in-blog search. Confirm the full accepted set rather than assuming symmetry.
+
+## 12. Phase 0 results — 2026-07-25
+
+**Method.** This is an append-only recheck of §§3–9; it does not replace the
+2026-07-25 observations above. Requests were anonymous fresh HTTP GETs with no cookie jar,
+a plausible Naver `Referer`, and an ordinary desktop Chrome (`section`/PC) or iPhone Safari
+(`m`) `User-Agent`. No telemetry endpoint was called. No raw response body is committed;
+the gitignored `scratch/phase0/` holds only local measurement summaries.
+
+### 12.1 Endpoint-table recheck
+
+All 15 rows in §9 returned HTTP 200 with their documented top-level shape: the six
+`section` calls returned their `result` JSON envelope; the six per-blog REST calls returned
+`{"isSuccess": true, "result": ...}`; CBOX returned plain JSON with `success`, `code`, and
+`result`; and the two body/search routes returned HTML. The topic-top call, previously only
+bundle-confirmed, returned the same `section` JSON shape. Representative result shapes were
+also rechecked: `category-list` exposed the four documented category/count keys,
+`post-list` exposed `categoryNo`, `categoryName`, `items`, `page`, and `totalCount`,
+`notice-post-list` exposed `noticePostViewList`, `popular-post-list` exposed
+`popularPostList`, `public-buddies` exposed paging plus `buddyList`, and `comments-info`
+exposed `blogNo` and comment availability/count metadata. The HTML post and in-blog search
+pages were 671,558 and 151,017 bytes respectively; the latter contained `logNo` references
+rather than a JSON envelope.
+
+### 12.2 Q-1 — bounded rate-limit measurement
+
+**Confirmed:** 30 requests were issued at a measured minimum 0.500-second interval
+(14.796 seconds from first start to last completion): 10 each to
+`section.blog.naver.com`, `m.blog.naver.com`, and `apis.naver.com`. All 30 returned HTTP
+200; none included `Retry-After`; no response was a block page or a changed error shape.
+This deliberately capped run is evidence only for this small, serialized anonymous sample,
+not a claim that a larger run cannot throttle.
+
+**Negative result / policy:** no non-429 throttle signature was observed. HTTP 429 still maps
+to `RateLimitedError` by contract; no additional status/body signature can be asserted yet.
+Retain the 0.5-second floor, and require measured evidence before classifying any other
+response as a rate-limit failure rather than a transport or target error.
+
+### 12.3 Q-2 — editor/body coverage
+
+**Confirmed:** public `section` date-filtered search supplied one post from each of 2005,
+2010, 2015, and 2020; each body fetched HTTP 200. DOM extraction from
+`div.post_ct#viewTypeSelector` produced non-empty readable text of 1,285, 4,249, 1,918,
+and 4,927 characters respectively. The 2005/2010/2015 samples had no
+`se-main-container` and no `__se_module_data` marker. The 2020 sample had both
+`se-main-container` and legacy `post_ct`, but zero module markers. The previously measured
+SE ONE post remains the only sampled `smartEditorVersion: 4` case and had 189 markers;
+the legacy samples exposed no version through this search surface.
+
+**Parser implication:** selector presence alone is not a safe editor discriminator.
+Use the SE component walk only when the post-list editor metadata and/or actual SE component
+markers establish that branch; otherwise flatten the legacy `post_ct` fallback. The fallback
+has now been shown to yield text across four sampled years, but this is not exhaustive of
+all historical templates.
+
+### 12.4 Q-3 — unavailable-target signatures
+
+**Confirmed:** a synthetic nonexistent `blogId` on `category-list` returned HTTP 400,
+`{"isSuccess":false,"error":{...}}`, with `error.code == "blog_id_invalidate"`. A nonexistent
+`logNo` on the real public `znogi` blog returned HTTP 404 from `comments-info` with
+`error.code == "not_exist_post"`; its mobile body route also returned HTTP 404 and only a
+redirect script to `MobileErrorView.naver?errorType=noPost`.
+
+**Typed policy:** map the observed nonexistent blog and post signatures to
+`NotFoundError`; do not infer that every HTTP 400 or 404 is not-found. Preserve an otherwise
+successful `post-list` visibility flag (`buddyOpen`, `bothBuddyOpen`, or `notOpen`) and map
+a subsequent anonymous access denial to `TargetUnavailableError`, rather than collapsing it
+to not-found.
+
+**Not fully sampled:** no deleted, private, suspended, or neighbour-only public target was
+available from the plan's public examples. The first pages (30 entries each) of `znogi`,
+`peopleteria`, and `lee_haimin` contained no neighbour-only flag. No shape is claimed for
+those target classes.
+
+### 12.5 Q-4 — in-blog-search drift policy
+
+**Confirmed:** `PostSearchList.naver` with `SearchText`, `orderBy=recentdate`, and a public
+blog returned HTTP 200 HTML containing extractable `logNo` references. This is still an HTML
+contract, not proof of permanent template stability.
+
+**Required failure policy:** extraction must require the expected result structure and at
+least one `logNo` for a non-empty rendered result. If that structure is absent or parsing
+fails, it must raise typed `BodyParseError` (exit 4); it must never return a silent empty
+search result. A genuine, structurally recognized zero-result page remains an empty result.
+
+### 12.6 Q-5 — `orderBy` vocabulary
+
+**Confirmed semantic values:** for section post search, `sim` and `date` returned distinct
+three-result orderings. `recentdate` returned the same ordering as `date`, while `accuracy`
+returned the same ordering as `sim`; because the server returned HTTP 200 for every tested
+string, those two are aliases or silent fallbacks, not independently confirmed vocabulary.
+Expose only canonical `sim` and `date` for section search.
+
+For in-blog HTML search, `recentdate` and `sim` returned distinct result orderings.
+`date` returned the same ordering as `recentdate`, so it is likewise an alias or fallback,
+not a separately confirmed semantic option. Expose only canonical `recentdate` and `sim`
+for in-blog search; do not assume the two endpoint families are symmetric.
+
+**Measurement limits:** this tested four section values (`sim`, `date`, `recentdate`,
+`accuracy`) and three in-blog values (`recentdate`, `sim`, `date`) against one public query.
+HTTP 200 alone is not acceptance evidence where the server silently chooses a default.
+
+### 12.7 Supplemental Phase 0 evidence — 2026-07-25
+
+**Method and handling.** This dated supplement preserves the earlier §12 record. All requests
+were anonymous GETs with no cookie jar, credentials, browser automation, telemetry calls, or
+writes. Only aggregate status/envelope/marker data is recorded here; request URLs, target
+identifiers, titles, and response bodies remain uncommitted in gitignored `scratch/phase0/`.
+
+#### Q-1 — sustained serialized measurement
+
+**Confirmed:** 360 requests were serialized across the three documented read hosts: 120 each to
+`section.blog.naver.com`, `m.blog.naver.com`, and `apis.naver.com`. The scheduled global floor was
+0.500 seconds between request starts; the measured minimum start interval was 0.500028 seconds
+(the maximum was 1.276027 seconds). The run took 182.661 seconds from first start through final
+completion, with a 182.491-second first-to-last-start span. Every host returned 120 HTTP 200
+responses. No host returned `Retry-After`, a non-200 response, or a sampled non-200 block-body
+marker.
+
+**Conservative mapping and limit:** this closes the prior small-sample limitation for a
+few-hundred-request, serialized anonymous run at the 0.5-second floor. It does not establish a
+quota, a higher safe rate, a per-IP policy, or a block signature: no throttle was observed.
+HTTP 429 remains the only evidenced rate-limit status mapping; do not classify another status or
+body as throttling without a later observation.
+
+#### Q-3 — bounded public unavailable-target search
+
+**Search method:** 12 public search terms covering Korean and English neighbour-only, private,
+closure/deletion, suspension, and withdrawal wording were queried through public `SearchList`
+twice: `type=blog` (up to three results per term) and `type=post` (up to three results per term).
+All 24 search requests returned HTTP 200. The blog pass yielded 35 unique public candidates:
+each candidate's `category-list` and first `post-list` page returned HTTP 200 with
+`isSuccess: true`; none of the returned post items had a true `buddyOpen`, `bothBuddyOpen`, or
+`notOpen` flag. The post pass yielded 32 distinct public search links; every corresponding
+`comments-info` response returned HTTP 200 with `isSuccess: true`. Thus this bounded stale-link
+check found no deleted target and the list scan found no neighbour-only target.
+
+**Exact observed signatures remain limited to the earlier records:** nonexistent blog:
+HTTP 400, `isSuccess: false`, `error.code: blog_id_invalidate`; nonexistent post:
+HTTP 404, `error.code: not_exist_post`, with the mobile route's `errorType=noPost` redirect
+marker. These are `NotFoundError` signatures only. A successful list visibility flag remains
+evidence of potential neighbour-only visibility, not an anonymous access-denial signature.
+
+**Unresolved after the bounded search:** deleted post, private blog, suspended blog, and
+neighbour-only post. No public non-sensitive target for any of those four classes was found in
+the 126 Q-3 requests above, so no class-specific status, envelope, redirect, or typed mapping is
+asserted. Preserve these classes as `TargetUnavailableError` only after a future measured
+anonymous denial signature; do not infer them from generic 4xx responses.

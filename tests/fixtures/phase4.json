@@ -1,0 +1,113 @@
+{
+  "comments_info": {
+    "isSuccess": true,
+    "result": {
+      "blogNo": 20001,
+      "postTitle": "합성 댓글 예시",
+      "totalCount": 3,
+      "availableCommentWrite": false,
+      "memoLog": false,
+      "postOpenWithCategoryOpenYn": true
+    }
+  },
+  "cbox_list": {
+    "success": true,
+    "code": "1000",
+    "result": {
+      "count": {
+        "comment": 2,
+        "reply": 1,
+        "total": 3
+      },
+      "pageModel": {
+        "page": 1,
+        "pageSize": 10,
+        "totalPages": 1
+      },
+      "commentList": [
+        {
+          "commentNo": "90001",
+          "parentCommentNo": "90001",
+          "replyLevel": 1,
+          "replyCount": 1,
+          "replyList": [
+            {
+              "commentNo": "90002",
+              "parentCommentNo": "90001",
+              "replyLevel": 2,
+              "replyCount": 0,
+              "replyList": [],
+              "contents": "합성 답글입니다.",
+              "userName": "합성 사용자 둘",
+              "maskedUserName": "합성**",
+              "profileUserId": "synthetic_bob",
+              "userProfileImage": "https://media.example.invalid/profiles/synthetic_bob.jpg",
+              "regTime": "2026-07-25T10:01:00+0900",
+              "modTime": "2026-07-25T10:01:00+0900",
+              "sympathyCount": 0,
+              "antipathyCount": 0,
+              "status": 0,
+              "best": false,
+              "deleted": false,
+              "secret": false,
+              "commentType": "TEXT",
+              "stickerId": null,
+              "imageList": []
+            }
+          ],
+          "contents": "합성 댓글입니다.",
+          "userName": "합성 사용자 하나",
+          "maskedUserName": "합성**",
+          "profileUserId": "synthetic_alice",
+          "userProfileImage": "https://media.example.invalid/profiles/synthetic_alice.jpg",
+          "regTime": "2026-07-25T10:00:00+0900",
+          "modTime": "2026-07-25T10:00:00+0900",
+          "sympathyCount": 2,
+          "antipathyCount": 0,
+          "status": 0,
+          "best": false,
+          "deleted": false,
+          "secret": false,
+          "commentType": "STICKER",
+          "stickerId": "synthetic-sticker-1",
+          "imageList": [
+            {
+              "imageUrl": "https://media.example.invalid/comments/synthetic-image-1.jpg",
+              "width": 640,
+              "height": 480
+            }
+          ]
+        },
+        {
+          "commentNo": "90003",
+          "parentCommentNo": "90003",
+          "replyLevel": 1,
+          "replyCount": 0,
+          "replyList": [],
+          "contents": "두 번째 합성 댓글입니다.",
+          "userName": "합성 사용자 셋",
+          "maskedUserName": "합성**",
+          "profileUserId": "synthetic_carol",
+          "userProfileImage": "https://media.example.invalid/profiles/synthetic_carol.jpg",
+          "regTime": "2026-07-25T10:02:00+0900",
+          "modTime": "2026-07-25T10:02:00+0900",
+          "sympathyCount": 0,
+          "antipathyCount": 0,
+          "status": 0,
+          "best": false,
+          "deleted": false,
+          "secret": false,
+          "commentType": "IMAGE",
+          "stickerId": null,
+          "imageList": [
+            {
+              "imageUrl": "https://media.example.invalid/comments/synthetic-image-2.jpg",
+              "width": 320,
+              "height": 320
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

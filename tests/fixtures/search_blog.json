@@ -1,0 +1,19 @@
+{
+  "result": {
+    "searchDisplayInfo": {
+      "query": "합성 블로그"
+    },
+    "searchList": [
+      {
+        "blogNo": "20001",
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogName": "합성 앨리스의 기록",
+        "nickName": "가상앨리스",
+        "blogDesc": "오프라인 테스트를 위한 손작성 한국어 소개입니다.",
+        "profileImgUrl": "https://example.invalid/synthetic_alice.png"
+      }
+    ],
+    "totalCount": 1,
+    "pagePerCount": 10
+  }
+}
