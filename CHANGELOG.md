@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - A `naver-blog` Claude Code skill at `.claude/skills/naver-blog/`, so Claude can chain the CLI's single-target primitives into multi-hop answers. Not part of the PyPI distribution.
 
+## [0.1.2] - 2026-07-25
+
+### Fixed
+
+- `posts --notices` now reports each notice's comment count. Notice cards spell the field `commentCount` where every other listing uses `commentCnt`, so a number Naver does supply was being dropped.
+- A notice's `visibility` is now read from the field the notice card actually carries (`postOpenType`) rather than inferred from the absence of the flags other listings use. The reported value is unchanged for every notice observed — 61 across 21 blogs, all public — but it is now grounded in the response instead of falling out of three missing fields, so an unobserved non-public notice is reported as unknown rather than confidently as public.
+
 ## [0.1.1] - 2026-07-25
 
 ### Fixed

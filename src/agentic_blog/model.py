@@ -395,6 +395,25 @@ def _search_visibility(node: dict[str, Any]) -> PostVisibility:
     return "public"
 
 
+def _notice_visibility(node: dict[str, Any]) -> PostVisibility | None:
+    """Read a notice card's own visibility field.
+
+    Notice cards carry none of the ``notOpen`` / ``bothBuddyOpen`` / ``buddyOpen`` flags the other
+    listings use, so ``_search_visibility`` fell through its final ``return "public"`` and reported
+    every notice as public on the strength of three absent fields. The card states its visibility
+    directly instead, as ``postOpenType``.
+
+    ``ALL_OPEN`` is the only value observed, across 61 notices on 21 blogs. Anything else is
+    reported as unknown rather than mapped: guessing a second value would be inventing a fact, and
+    a null ``visibility`` is already a normal state elsewhere in the output (single ``post`` reads
+    always produce one), so it reads as "no signal" rather than as a claim.
+    """
+    open_type = node.get("postOpenType")
+    if open_type == "ALL_OPEN":
+        return "public"
+    return None
+
+
 def build_search_post(
     node: dict[str, Any], *, captured_at: datetime, include_raw: bool = False
 ) -> Post:
@@ -869,12 +888,16 @@ def build_mobile_post(
             _search_id(node["categoryNo"]) if node.get("categoryNo") is not None else None
         ),
         category_name=_search_text(_phase3_string(node, "categoryName", nullable=True)),
-        comment_count=_search_count(node.get("commentCnt")),
+        # The notice card spells its comment total `commentCount`; every other card uses
+        # `commentCnt`. Reading only the latter dropped a number Naver does supply.
+        comment_count=_search_count(
+            node.get("commentCnt") if kind != "notice" else node.get("commentCount")
+        ),
         like_count=_search_count(node.get("sympathyCnt")),
         share_count=_search_count(node.get("shareCnt")),
         thumbnail_url=_phase3_string(node, "thumbnailUrl", nullable=True),
         editor_version=_phase3_editor_version(node.get("smartEditorVersion")),
-        visibility=_search_visibility(node),
+        visibility=_notice_visibility(node) if kind == "notice" else _search_visibility(node),
         is_notice=is_notice,
         captured_at=captured_at,
         raw=node if include_raw else None,
