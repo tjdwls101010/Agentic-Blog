@@ -20,9 +20,9 @@ Capture no live payload in the repository. Report the command form, exit code, d
 
 ## Why did `posts --query` behave differently from `search`?
 
-`search` uses Naver's Blog section search and can search posts, blogs, or IDs. `posts BLOG_ID --query TEXT` is a blog-local search backed by an HTML response. It produces listing-shaped `Post` records and has different supported combinations: it cannot be combined with `--category` other than the default, `--sort popular`, or `--notices`.
+`search` uses Naver's Blog section search and can search posts, blogs, or IDs. `posts BLOG_ID --query TEXT` is a blog-local search backed by Naver's in-blog search JSON API. It produces listing-shaped `Post` records and has different supported combinations: it cannot be combined with `--category` other than the default, `--sort popular`, `--notices`, or `--tag`.
 
-Because the local search is HTML-backed, a template change can produce exit code 4 even while a section search succeeds.
+The two commands use different JSON APIs, so upstream envelope drift can produce exit code 4 in one while the other succeeds.
 
 ## Why are `body`, `comments`, or other fields `null`?
 

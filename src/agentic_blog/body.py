@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
+from html import unescape
 
 from lxml import etree
 from lxml import html as lxml_html
@@ -60,7 +62,7 @@ def _has_class(node: etree._Element, name: str) -> bool:
     return name in (node.get("class") or "").split()
 
 
-def _node_text(node: etree._Element) -> str:
+def _node_text(node: etree._Element, *, exclude_class: str | None = None) -> str:
     """Return visible-ish text while retaining line breaks represented by ``br``."""
     parts: list[str] = []
 
@@ -68,7 +70,9 @@ def _node_text(node: etree._Element) -> str:
         if current.text:
             parts.append(current.text)
         for child in current:
-            if child.tag == "br":
+            if exclude_class is not None and _has_class(child, exclude_class):
+                pass
+            elif child.tag == "br":
                 parts.append("\n")
             elif isinstance(child.tag, str):
                 walk(child)
@@ -105,11 +109,23 @@ def _integer_attribute(node: etree._Element, name: str) -> int | None:
 
 def _image_blocks(node: etree._Element, media: list[Media]) -> list[str]:
     blocks: list[str] = []
-    for image in node.xpath("self::img | .//img"):
+    images = node.xpath("self::img | .//img")
+    for image in images:
         url = image.get("data-lazy-src") or image.get("src")
         if not url:
             continue
-        caption = _first_text(node, "se-caption") or image.get("alt") or None
+        caption = _first_text(image, "se-caption")
+        if caption is None:
+            for ancestor in image.iterancestors():
+                if ancestor.tag == "figure" or _has_class(ancestor, "se-module-image"):
+                    caption = _first_text(ancestor, "se-caption")
+                    if caption is not None:
+                        break
+                if ancestor is node:
+                    break
+        if caption is None and len(images) == 1:
+            caption = _first_text(node, "se-caption")
+        caption = caption or image.get("alt") or None
         media.append(
             Media(
                 kind="photo",
@@ -122,6 +138,32 @@ def _image_blocks(node: etree._Element, media: list[Media]) -> list[str]:
         alt = _markdown_text(caption or "image")
         blocks.append(f"![{alt}]({url})")
     return blocks
+
+
+def _module_data(component: etree._Element) -> dict[str, object] | None:
+    modules = component.xpath(f".//script[{_class('__se_module_data')}]/@data-module")
+    if not modules:
+        return None
+    try:
+        value = json.loads(unescape(modules[0]))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _module_content(component: etree._Element) -> dict[str, object] | None:
+    module = _module_data(component)
+    if module is None:
+        return None
+    data = module.get("data")
+    return data if isinstance(data, dict) else None
+
+
+def _module_integer(data: dict[str, object], name: str) -> int | None:
+    value = data.get(name)
+    if not isinstance(value, str) or not value.isdecimal():
+        return None
+    return int(value)
 
 
 def _top_level_components(container: etree._Element) -> list[etree._Element]:
@@ -177,6 +219,72 @@ def _se_one(container: etree._Element) -> BodyResult:
                 meaningful = True
         elif _has_class(component, "se-horizontalLine"):
             blocks.append("---")
+        elif _has_class(component, "se-sticker"):
+            images = component.xpath(".//img")
+            if images:
+                image = images[0]
+                url = image.get("src")
+                if url:
+                    media.append(
+                        Media(
+                            kind="sticker",
+                            url=url,
+                            width=_integer_attribute(image, "width"),
+                            height=_integer_attribute(image, "height"),
+                        )
+                    )
+                    meaningful = True
+        elif _has_class(component, "se-video"):
+            data = _module_content(component)
+            if data is not None:
+                metadata = data.get("mediaMeta")
+                caption = metadata.get("title") if isinstance(metadata, dict) else None
+                thumbnail = data.get("thumbnail")
+                # The measured module exposes no player URL, so url is null rather than a still
+                # image presented as the video attachment.
+                if isinstance(thumbnail, str):
+                    media.append(
+                        Media(
+                            kind="video",
+                            url=None,
+                            thumbnail_url=thumbnail,
+                            caption=caption if isinstance(caption, str) else None,
+                            width=_module_integer(data, "width"),
+                            height=_module_integer(data, "height"),
+                        )
+                    )
+                    meaningful = True
+            # A malformed media module loses only that component; readable siblings still survive.
+        elif _has_class(component, "se-oembed"):
+            data = _module_content(component)
+            if data is not None:
+                url = data.get("inputUrl")
+                thumbnail = data.get("thumbnailUrl")
+                description = data.get("description")
+                if isinstance(url, str):
+                    title = description if isinstance(description, str) and description else url
+                    blocks.append(f"[{_markdown_text(title)}]({url})")
+                    # OEmbed may describe a video, social post, or map. Unknown is now reachable,
+                    # so all four published MediaKind values are producible without guessing.
+                    media.append(
+                        Media(
+                            kind="unknown",
+                            url=url,
+                            thumbnail_url=thumbnail if isinstance(thumbnail, str) else None,
+                            caption=description if isinstance(description, str) else None,
+                        )
+                    )
+                    meaningful = True
+            # A malformed media module loses only that component; readable siblings still survive.
+        else:
+            text = _node_text(component, exclude_class="se-caption")
+            if text:
+                blocks.append(_markdown_text(text))
+                meaningful = True
+            image_blocks = _image_blocks(component, media)
+            if image_blocks:
+                blocks.extend(image_blocks)
+                meaningful = True
     if not meaningful:
         raise _drift("non-empty SmartEditor ONE components")
     return BodyResult(markdown="\n\n".join(blocks), media=tuple(media))

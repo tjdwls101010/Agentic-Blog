@@ -29,6 +29,7 @@ class Media:
 
     kind: MediaKind = "unknown"
     url: str | None = None
+    thumbnail_url: str | None = None
     caption: str | None = None
     width: int | None = None
     height: int | None = None
@@ -41,6 +42,7 @@ class Media:
         return {
             "kind": self.kind,
             "url": self.url,
+            "thumbnail_url": self.thumbnail_url,
             "caption": self.caption,
             "width": self.width,
             "height": self.height,
@@ -140,6 +142,7 @@ class Post:
     title: str = ""
     brief: str | None = None
     body: str | None = None
+    tags: list[str] | None = None
     created_at: datetime | None = None
     blog_name: str | None = None
     nickname: str | None = None
@@ -178,6 +181,7 @@ class Post:
             "title": self.title,
             "brief": self.brief,
             "body": self.body,
+            "tags": self.tags,
             "created_at": _iso_utc(self.created_at),
             "blog_name": self.blog_name,
             "nickname": self.nickname,
@@ -563,6 +567,7 @@ FIELD_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "title": "Post title.",
         "brief": "Listing summary supplied by Naver.",
         "body": "Post body rendered as Markdown; unavailable in listings.",
+        "tags": "Hashtags carried by the post, or null when not fetched.",
         "created_at": "Post creation time as ISO-8601 UTC, or null.",
         "blog_name": "Blog display name.",
         "nickname": "Blog author nickname.",
@@ -624,6 +629,7 @@ FIELD_DESCRIPTIONS: dict[str, dict[str, str]] = {
     "Media": {
         "kind": "Attachment kind: photo, video, sticker, or unknown.",
         "url": "Attachment URL.",
+        "thumbnail_url": "Attachment thumbnail URL.",
         "caption": "Attachment caption.",
         "width": "Attachment width in pixels.",
         "height": "Attachment height in pixels.",
@@ -651,6 +657,7 @@ def _schema_sample(model: type[object]) -> dict[str, object]:
             title="Post title",
             brief="Post summary",
             body="Post body",
+            tags=["tag"],
             created_at=datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC),
             blog_name="Blog name",
             nickname="Author",
@@ -664,6 +671,7 @@ def _schema_sample(model: type[object]) -> dict[str, object]:
                 Media(
                     kind="photo",
                     url="https://example.test/media.jpg",
+                    thumbnail_url="https://example.test/media-thumbnail.jpg",
                     caption="Caption",
                     width=1,
                     height=2,
@@ -745,6 +753,7 @@ def _schema_sample(model: type[object]) -> dict[str, object]:
         return Media(
             kind="photo",
             url="https://example.test/media.jpg",
+            thumbnail_url="https://example.test/media-thumbnail.jpg",
             caption="Caption",
             width=1,
             height=2,
@@ -1006,6 +1015,7 @@ def build_directory_post(
         title=_search_text(_phase3_string(node, "title")) or "",
         brief=_search_text(_phase3_string(node, "briefContents")) or "",
         nickname=_phase3_string(node, "nickname"),
+        thumbnail_url=(_phase3_string(node, "thumbnailUrl") if "thumbnailUrl" in node else None),
         captured_at=captured_at,
         raw=node if include_raw else None,
     )

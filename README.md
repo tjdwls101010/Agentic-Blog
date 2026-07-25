@@ -68,8 +68,8 @@ offline and write to stdout.
 | --- | --- | --- |
 | `search <query>` | Search public Naver Blog posts, blogs, people, or tags. | `--type {post,blog,id,tag}` (default `post`); `--self-purchased` (내돈내산, `--type post` only); `--sort {sim,date}` (default `sim`); `--since YYYY-MM-DD`; `--until YYYY-MM-DD` |
 | `blog <blog_id>` | Read one public blog profile and category tree. | — |
-| `posts <blog_id>` | List public posts from a blog. | `--category N` (default `0`, all); `--sort {recent,popular}` (default `recent`); `--notices`; `--query TEXT` |
-| `post <url-or-blog_id> [log_no]` | Read one public post body and, by default, its full comment thread. | `--no-comments`; `--comment-sort {new,favorite}` (default `new`); `--comment-limit N` |
+| `posts <blog_id>` | List public posts from a blog. | `--category N` (default `0`, all); `--sort {recent,popular}` (default `recent`); `--notices`; `--query TEXT`; `--tag TEXT` |
+| `post <url-or-blog_id> [log_no]` | Read one public post body, its tags, and by default its full comment thread. | `--no-comments`; `--comment-sort {new,favorite}` (default `new`); `--comment-limit N` |
 | `buddies <blog_id>` | List a blog's public buddies/neighbours. | — |
 | `topics` | Read Naver's public blog topic tree. | — |
 | `topic <directory_seq>` | List posts in a public topic. | `--top` |
@@ -84,9 +84,12 @@ verbose diagnostics include the typed error class. `--limit N` applies to `searc
 Important combinations are validated as usage errors:
 
 - Search date bounds are server-side and available only with `search --type post`. `--type id` accepts neither `--sort` nor date bounds.
-- `posts --query` cannot be combined with `--category`, `--sort popular`, or `--notices`; its text must not be empty.
-- `posts --notices` cannot be combined with `--sort popular`, `--category`, or `--query`.
+- `posts --query` cannot be combined with `--category`, `--sort popular`, `--notices`, or `--tag`; its text must not be empty.
+- `posts --tag` cannot be combined with `--category`, `--sort popular`, `--notices`, or `--query`; its text must not be empty. It accepts no sort of its own, because Naver's in-blog tag search ignores one and always answers in date order.
+- `posts --notices` cannot be combined with `--sort popular`, `--category`, `--query`, or `--tag`.
 - A bare post number is not enough: provide a Naver post URL or both `<blog_id> <log_no>`.
+
+`blog`, `posts`, `buddies`, and `post` all accept a `blog.naver.com` or `m.blog.naver.com` URL in place of a bare blog ID.
 
 ## Output and storage
 

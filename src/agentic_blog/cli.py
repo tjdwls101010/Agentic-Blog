@@ -147,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     posts_parser.add_argument("--sort", choices=("recent", "popular"), default="recent")
     posts_parser.add_argument("--notices", action="store_true")
     posts_parser.add_argument("--query")
+    posts_parser.add_argument("--tag")
     _add_common_read_flags(posts_parser)
 
     buddies_parser = subparsers.add_parser("buddies", help="Read one blog's public buddies.")
@@ -374,6 +375,7 @@ def _cmd_posts(args: argparse.Namespace) -> int:
                 sort=args.sort,
                 notices=args.notices,
                 query=args.query,
+                tag=args.tag,
                 limit=args.limit,
                 raw=args.raw,
             ),
@@ -439,6 +441,17 @@ def _validate_read_args(parser: argparse.ArgumentParser, args: argparse.Namespac
                     parser.error("--query does not support --sort popular")
                 if args.notices:
                     parser.error("--query does not support --notices")
+            if args.tag is not None:
+                if not args.tag.strip():
+                    parser.error("--tag must be non-empty")
+                if args.query is not None:
+                    parser.error("--tag does not support --query")
+                if args.category != 0:
+                    parser.error("--tag does not support --category")
+                if args.sort != "recent":
+                    parser.error("--tag does not support --sort popular")
+                if args.notices:
+                    parser.error("--tag does not support --notices")
 
         return
     if not args.query.strip():

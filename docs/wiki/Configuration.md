@@ -59,7 +59,8 @@ crawl mode:
 All numeric limits must be non-negative. Date bounds are server-side and apply
 only to `search --type post`; `--type id` does not accept sort or date bounds.
 The command parser rejects incompatible `posts` combinations, including
-`--query` with a category, popular sort, or notices.
+`--query` with a category, popular sort, notices, or `--tag`; and `--tag` with a
+category, popular sort, notices, or `--query`.
 
 There is no CLI flag or environment variable for request pacing, request budget,
 or HTTP timeout. Do not infer such controls from sibling projects.
@@ -75,9 +76,9 @@ so these constructor settings are not CLI configuration.
 
 ## Diagnostic data
 
-`--raw` includes the preserved upstream object for `search`, `blog`, ordinary `posts`
-requests, `buddies`, and `topic`. `posts --query` cannot be combined with `--raw`;
-the `post` and `topics` commands also reject the flag. Treat raw data as diagnostic
-output, choose an explicit local `--output` path, and do not assume that it is a stable
-public schema. Use `agentic-blog schema --json` to inspect the supported structured
-output schema offline.
+`--raw` includes the preserved upstream object for `search`, `blog`, `posts`,
+`buddies`, and `topic`, including `posts --query` and `posts --tag` results. The
+`post` and `topics` commands reject the flag. Treat raw data as diagnostic output,
+choose an explicit local `--output` path, and do not assume that it is a stable public
+schema. Use `agentic-blog schema --json` to inspect the supported structured output
+schema offline.

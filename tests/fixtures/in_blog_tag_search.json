@@ -1,0 +1,35 @@
+{
+  "isSuccess": true,
+  "result": {
+    "list": [
+      {
+        "addDate": 1700000000000,
+        "blogId": "synthetic_alice",
+        "blogNo": 20001,
+        "categoryName": "Synthetic Category",
+        "commentCount": 1,
+        "commentCountMark": "1",
+        "contents": "Synthetic contents",
+        "isCommentVisible": true,
+        "isMarketPost": false,
+        "isMemo": false,
+        "isSympathyVisible": true,
+        "isThisDayPost": false,
+        "isVRThumbnail": false,
+        "isVideoThumbnail": false,
+        "logNo": 10001,
+        "product": null,
+        "sympathyCount": 2,
+        "thumbnailCount": 1,
+        "thumbnailUrl": "https://blogthumb.pstatic.net/synthetic.jpg",
+        "title": "Synthetic title",
+        "titleHead": "",
+        "titleHeadColor": ""
+      }
+    ],
+    "currentPage": 1,
+    "totalCount": 318,
+    "totalPage": 16,
+    "sortType": "date"
+  }
+}

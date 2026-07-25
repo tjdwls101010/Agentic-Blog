@@ -6,6 +6,7 @@ import pytest
 
 import agentic_blog.endpoints as endpoints
 from agentic_blog.endpoints import (
+    BLOG_TAG_LIST_INFO,
     CBOX_OBJECT_ID,
     CBOX_POOL,
     MOBILE,
@@ -24,12 +25,14 @@ from agentic_blog.endpoints import (
     directory_post_list,
     directory_top_post_list,
     in_blog_search,
+    in_blog_tag_search,
     mobile_search_post,
     mobile_tag_search,
     notice_post_list,
     popular_post_list,
     post_html,
     post_list,
+    post_tags,
     public_buddies,
     search_list,
 )
@@ -236,6 +239,25 @@ def test_phase4_constants_preserve_non_derivable_cbox_contract():
     assert CBOX_OBJECT_ID.format(blog_no=20001, log_no=10001) == "20001_201_10001"
 
 
+def test_post_tags_normalizes_a_post_url_into_the_measured_pc_host_request():
+    request = post_tags("https://blog.naver.com/synthetic_alice/10001")
+
+    assert request == RequestSpec(
+        BLOG_TAG_LIST_INFO,
+        {"blogId": "synthetic_alice", "logNo": "10001", "viewType": "S"},
+    )
+
+
+def test_in_blog_tag_search_omits_the_sort_parameter_the_endpoint_ignores():
+    request = in_blog_tag_search("synthetic_alice", "coffee", page=2)
+
+    assert request == RequestSpec(
+        "https://m.blog.naver.com/api/blogs/synthetic_alice/search/tag",
+        {"query": "coffee", "page": 2},
+    )
+    assert "sortType" not in request.params
+
+
 @pytest.mark.parametrize(
     ("builder", "args", "kwargs"),
     [
@@ -249,6 +271,8 @@ def test_phase4_constants_preserve_non_derivable_cbox_contract():
         (in_blog_search, ("synthetic_alice", ""), {}),
         (in_blog_search, ("synthetic_alice", "query"), {"page": 0}),
         (in_blog_search, ("synthetic_alice", "query"), {"sort": "recentdate"}),
+        (in_blog_tag_search, ("synthetic_alice", ""), {}),
+        (in_blog_tag_search, ("synthetic_alice", "query"), {"page": 0}),
         (mobile_search_post, ("",), {}),
         (mobile_search_post, ("query",), {"sort": "relevance"}),
         (mobile_search_post, ("query",), {"page": 0}),

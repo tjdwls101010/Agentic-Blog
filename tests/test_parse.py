@@ -20,6 +20,7 @@ from agentic_blog.parse import (
     parse_directory_list,
     parse_directory_posts,
     parse_post_list,
+    parse_post_tags,
     parse_search_page,
 )
 
@@ -224,6 +225,30 @@ def test_parse_buddies_returns_page_metadata_and_raw_items() -> None:
     assert isinstance(page.items[0], dict)
     assert page.items[0]["blogId"] == "synthetic_bob"
     assert page.items[0]["updateTime"] == "8 minutes ago"
+
+
+def test_parse_buddies_accepts_a_null_update_label() -> None:
+    """A neighbour with nothing to show carries updateTime: null, measured on a real blog.
+
+    Requiring a string here failed `buddies` and `blog` outright, and nothing reads the field.
+    """
+    payload = deepcopy(load_fixture("phase3.json")["public_buddies"])
+    payload["result"]["buddyList"][0]["updateTime"] = None
+
+    page = parse_buddies(payload)
+
+    assert page.items[0]["updateTime"] is None
+
+
+@pytest.mark.parametrize("value", [True, 0, 1.0, [], {}])
+def test_parse_buddies_rejects_a_non_string_non_null_update_label(value: object) -> None:
+    payload = deepcopy(load_fixture("phase3.json")["public_buddies"])
+    payload["result"]["buddyList"][0]["updateTime"] = value
+
+    with pytest.raises(
+        EnvelopeParseError, match=re.escape("response.result.buddyList[0].updateTime")
+    ):
+        parse_buddies(payload)
 
 
 @pytest.mark.parametrize("value", [None, True, -1, 1.0, "20002", [], {}])
@@ -725,6 +750,56 @@ def test_notice_cards_identify_their_blog_without_domain_id() -> None:
     (card,) = parse_post_list(payload, kind="notice")
 
     assert card["blogId"] == "synthetic_alice"
+
+
+def test_post_tags_decodes_utf8_once_splits_commas_and_drops_empty_strings() -> None:
+    payload = {
+        "taglist": [
+            {
+                "msg": "",
+                "logno": "10001",
+                "tagName": "%ED%95%9C%EA%B8%80,coffee,,",
+                "encTagName": "%C7%D1%B1%DB",
+            }
+        ]
+    }
+
+    assert parse_post_tags(payload, "10001") == ["한글", "coffee"]
+
+
+def test_post_tags_accepts_an_empty_taglist_as_an_ordinary_empty_answer() -> None:
+    assert parse_post_tags({"taglist": []}, "10001") == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"taglist": {}},
+        {"taglist": [None]},
+        {"taglist": [{"logno": "10001"}]},
+    ],
+)
+def test_post_tags_rejects_missing_or_malformed_measured_envelope(payload: object) -> None:
+    with pytest.raises(EnvelopeParseError):
+        parse_post_tags(payload, "10001")
+
+
+def test_post_tags_rejects_a_log_number_mismatch_as_drift() -> None:
+    payload = {"taglist": [{"logno": "10002", "tagName": "coffee"}]}
+
+    with pytest.raises(EnvelopeParseError, match=r"response.taglist\[0\].logno"):
+        parse_post_tags(payload, "10001")
+
+
+@pytest.mark.parametrize("field", ["commentCount", "postOpenType"])
+def test_notice_cards_reject_an_absent_consumed_field_as_drift(field: str) -> None:
+    fixture = load_fixture("phase3.json")
+    payload = deepcopy(fixture["notice_post_list"])
+    del payload["result"]["noticePostViewList"][0][field]
+
+    with pytest.raises(EnvelopeParseError, match=field):
+        parse_post_list(payload, kind="notice")
 
 
 def test_comment_images_may_carry_their_address_under_url() -> None:

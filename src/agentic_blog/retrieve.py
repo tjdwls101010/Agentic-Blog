@@ -10,7 +10,7 @@ from typing import Any, Literal, Protocol
 from . import endpoints, parse
 from .body import parse_post_body
 from .errors import EnvelopeParseError, NotFoundError
-from .identifiers import PostRef, parse_post_ref
+from .identifiers import PostRef, parse_blog_ref, parse_post_ref
 from .model import (
     Blog,
     Comment,
@@ -325,6 +325,7 @@ def _validate_category(category: int) -> None:
 
 def fetch_blog(client: SearchClient, blog_id: str, *, raw: bool = False) -> RetrieveResult:
     """Return one measured public blog profile and its category tree."""
+    blog_id = parse_blog_ref(blog_id).blog_id
     starting_requests, remaining_requests = _client_counters(client)
     if remaining_requests < 2:
         return _result([], "max_requests", starting_requests, client)
@@ -361,7 +362,8 @@ def fetch_blog(client: SearchClient, blog_id: str, *, raw: bool = False) -> Retr
         blog.buddy_count = parse.parse_buddies(
             _request(client, endpoints.public_buddies(blog_id, page=1))
         ).public_buddy_count
-    return _result([blog], "single_target", starting_requests, client)
+        return _result([blog], "single_target", starting_requests, client)
+    return _result([blog], "max_requests", starting_requests, client)
 
 
 @dataclass
@@ -508,8 +510,19 @@ def fetch_post(
         comments=None if not comments else [],
         captured_at=datetime.now(UTC),
     )
-    if not comments or info.total_count == 0 or comment_limit == 0:
+
+    def complete() -> RetrieveResult:
+        # Tags need their own request, so they yield to the budget rather than failing the read.
+        # None means not fetched; an empty list is the post's measured answer.
+        if not _can_request(client):
+            return _result([result_post], "max_requests", starting_requests, client)
+        result_post.tags = parse.parse_post_tags(
+            _request(client, endpoints.post_tags(post_ref)), post_ref.log_no
+        )
         return _result([result_post], "single_target", starting_requests, client)
+
+    if not comments or info.total_count == 0 or comment_limit == 0:
+        return complete()
 
     graph = _CommentGraph()
     page_number = 1
@@ -548,14 +561,14 @@ def fetch_post(
             and graph.selected_complete(comment_limit)
         ):
             result_post.comments = graph.comments(comment_limit, complete=True)
-            return _result([result_post], "single_target", starting_requests, client)
+            return complete()
         if page.current_page >= page.total_pages:
             graph.validate_complete()
             comment_count, reply_count, total_count = graph.counts()
             if (comment_count, reply_count, total_count) != expected_counts:
                 raise EnvelopeParseError("CBOX assembled counts must match measured counts")
             result_post.comments = graph.comments(comment_limit, complete=True)
-            return _result([result_post], "single_target", starting_requests, client)
+            return complete()
         page_number += 1
 
 
@@ -566,6 +579,7 @@ def _fetch_post_search(
     *,
     limit: int | None,
     sort: str = "sim",
+    tag: bool = False,
     raw: bool = False,
 ) -> RetrieveResult:
     """Search one blog's own posts through the mobile JSON endpoint.
@@ -586,13 +600,16 @@ def _fetch_post_search(
     items: list[RetrieveItem] = []
     seen: set[tuple[str, str]] = set()
     page_number = 1
-    page_size = 20
+    page_size = 30 if tag else 20
     while True:
         if not _can_request(client):
             return _result(items, "max_requests", starting_requests, client)
-        cards = parse.parse_mobile_search_page(
-            client.get_json(endpoints.in_blog_search(blog_id, query, sort=sort, page=page_number))
+        request = (
+            endpoints.in_blog_tag_search(blog_id, query, page=page_number)
+            if tag
+            else endpoints.in_blog_search(blog_id, query, sort=sort, page=page_number)
         )
+        cards = parse.parse_mobile_search_page(client.get_json(request))
         for index, node in enumerate(cards):
             item = _build_search_card(
                 build_mobile_search_post,
@@ -626,6 +643,7 @@ def fetch_posts(
     sort: str = "recent",
     notices: bool = False,
     query: str | None = None,
+    tag: str | None = None,
     limit: int | None = None,
     raw: bool = False,
 ) -> RetrieveResult:
@@ -638,6 +656,8 @@ def fetch_posts(
         raise ValueError("notices do not support popular sort")
     if (notices or sort == "popular") and category != 0:
         raise ValueError("notices and popular sort do not support category")
+    if query is not None and tag is not None:
+        raise ValueError("tag does not support query")
     if query is not None:
         if category != 0:
             raise ValueError("query does not support category")
@@ -649,6 +669,16 @@ def fetch_posts(
         # to the endpoint's `date`. Relevance ordering exists upstream but `posts --sort`
         # speaks recent/popular, and widening that vocabulary is not this change's job.
         return _fetch_post_search(client, blog_id, query, limit=limit, sort="date", raw=raw)
+    if tag is not None:
+        if not isinstance(tag, str) or not tag.strip():
+            raise ValueError("tag must be non-empty")
+        if category != 0:
+            raise ValueError("tag does not support category")
+        if sort != "recent":
+            raise ValueError("tag does not support popular sort")
+        if notices:
+            raise ValueError("tag does not support notices")
+        return _fetch_post_search(client, blog_id, tag, limit=limit, tag=True, raw=raw)
     starting_requests, _ = _client_counters(client)
     if limit == 0:
         return _result([], "limit_reached", starting_requests, client)
