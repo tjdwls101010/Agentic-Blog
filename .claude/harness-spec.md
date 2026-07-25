@@ -52,7 +52,10 @@ Naver products (카페/지식iN/뉴스/포스트/쇼핑/플레이스), and devel
 | B13 | Empty `buddies` is ordinary, not an error | skill | naver-blog | generated |
 | B14 | `stop_reason` semantics; `max_requests` means partial, not finished | skill | naver-blog | generated |
 | B15 | Cost model: 0.5s floor, 100-request budget. Bound fan-out **and report the shape actually covered** — a sampled answer presented as complete is wrong | skill | naver-blog | generated |
-| B16 | Sponsored content is pervasive and **Naver publishes no `is_ad` field**; judgment is the only instrument, and an invisible judgment is uncheckable | skill | naver-blog | generated — **half of this is now stale**, see Change history 2026-07-25 (planning) |
+| B16 | Sponsored content is pervasive and **Naver publishes no `is_ad` field**. It does publish the opposite claim — `isBuyWithMyOwnMoney`, surfaced as `search --self-purchased` — but that is the **blogger's self-declaration**, so it narrows the pool without cleaning it, and its absence means almost nothing. Judgment stays the instrument, and an invisible judgment is uncheckable | skill | naver-blog | generated |
+| B20 | `buddy_count` counts only **disclosed** neighbours; `0` means "publishes no list", not "has none" — Naver's private total is routinely orders of magnitude larger | skill | naver-blog | generated |
+| B21 | `--type tag` and `--type post` index different things: full text finds mentions, tags find posts an author considered to be *about* the term. Neither dominates | skill | naver-blog | generated |
+| B22 | Naver's search stops answering after ~1,000 posts per query whatever total it reports, so `no_next_page` on a broad query is not "you have them all" | skill | naver-blog | generated |
 | B17 | Exit-code handling; **there is no exit 2**, unlike every sibling | skill | naver-blog | generated |
 | B18 | The unobserved region (이웃공개 / deleted / private / suspended) is labelled unobserved rather than diagnosed | skill | naver-blog | generated |
 | B19 | No writes exist; no `crawl`; keep captures out of the repo because it tracks `.json` fixtures | skill | naver-blog | generated |
@@ -157,3 +160,22 @@ the PyPI simple index, which is what keeps it correct across releases like these
   Rationale and wording in `13-build-spec.md` §5.1. **The skill file was deliberately not edited
   this session** — this arc was planning-only, and the correction ships with the commands that make
   the flag reachable.
+
+- **2026-07-25 (implementation)** — Built the agreed scope and released **v0.2.0**: `search
+  --self-purchased`, `search --type tag`, `posts --query` migrated off HTML scraping to Naver's
+  in-blog search API, and the two permanently-null `Blog` fields repaired. B16 corrected as planned
+  above; B20–B22 added for the facts the new surfaces introduce. The skill still hardcodes no
+  version.
+
+  One planning error surfaced during implementation and is worth keeping: `13-build-spec.md` §2.1
+  specified `/api/search/v1/tag` for tag search on the strength of its envelope matching. Building
+  the fixture from a real capture showed the envelope matches but the **items do not** — that
+  endpoint returns tag *groups* (`{postCount, tag, blogs:[…]}`), not posts, and its nested cards use
+  a third highlight class (`<em class="srch">`). `--type tag` ships against `/api/tags/search/post`,
+  which is genuinely a flat post list. Verifying an envelope is not verifying a payload.
+
+  The pre-release sweep also caught a crash present in **every prior release**: Naver truncates
+  `briefContents` mid-emoji, leaving an unpaired surrogate that cannot be UTF-8 encoded, so
+  `posts`/`blog` aborted with `UnicodeEncodeError` on 3 of 30 blogs. Fixed at the two text
+  normalizers. It was outside the agreed scope, and shipping a coverage release over a known crash
+  on ordinary data was not defensible.

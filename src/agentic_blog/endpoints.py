@@ -18,15 +18,22 @@ SECTION_DIRECTORY_TOP_POST_LIST = f"{SECTION}DirectoryTopPostList.naver"
 
 MOBILE = "https://m.blog.naver.com/api/blogs/"
 MOBILE_HTML = "https://m.blog.naver.com/"
+MOBILE_SEARCH_POST = "https://m.blog.naver.com/api/search/v1/post"
+MOBILE_TAG_SEARCH = "https://m.blog.naver.com/api/tags/search/post"
 CBOX = "https://apis.naver.com/commentBox/cbox/"
 CBOX_LIST = f"{CBOX}web_naver_list_json.json"
-LEGACY = "https://blog.naver.com/"
-LEGACY_POST_SEARCH_LIST = f"{LEGACY}PostSearchList.naver"
 CBOX_POOL = "blogid"  # Other guessed pools return code 3300.
 CBOX_OBJECT_ID = "{blog_no}_201_{log_no}"  # Literal 201 is undocumented; recon §6.
 POST_LIST_MAX_ITEM_COUNT = 30  # 31+ -> param_is_invalidate
+SEARCH_MAX_ITEM_COUNT = 30  # Both search hosts return the default page above this.
 
-_SEARCH_TYPES = frozenset({"post", "blog", "id"})
+#: Both search hosts stop yielding at 1,000 posts however deep you page. The mobile
+#: envelope nonetheless reports totalCount in the millions and totalPage in the hundreds
+#: of thousands, and those figures drift between pages — they size the corpus, they do not
+#: bound pagination. Never drive paging from them; stop on a short page. See plan doc 13 §1.1.
+SEARCH_RESULT_CEILING = 1000
+
+_SEARCH_TYPES = frozenset({"post", "blog", "id"})  # section only; tag lives on the mobile host
 _SEARCH_SORTS = frozenset({"sim", "date"})
 
 
@@ -261,27 +268,95 @@ def cbox_list(
     )
 
 
-def post_search_list(
-    blog_id: str | BlogRef,
+def mobile_search_post(
+    query: str,
+    *,
+    sort: str = "sim",
+    page: int = 1,
+    item_count: int = SEARCH_MAX_ITEM_COUNT,
+    since: str | None = None,
+    until: str | None = None,
+    self_purchased: bool = False,
+) -> RequestSpec:
+    """Build a mobile ``/api/search/v1/post`` request.
+
+    ``periodType`` is deliberately absent: the site's own bundle never sends it, and
+    passing it changes nothing. ``startDate``/``endDate`` are the real date bounds.
+    """
+    query = _required_text(query, "search query")
+    if not isinstance(sort, str) or sort not in _SEARCH_SORTS:
+        raise InvalidIdentifierError("invalid search sort")
+    _positive_int(page, "page")
+    _search_item_count(item_count)
+    _date_bound(since, "since")
+    _date_bound(until, "until")
+    if since is not None and until is not None and since > until:
+        raise InvalidIdentifierError("since must not be after until")
+    if not isinstance(self_purchased, bool):
+        raise InvalidIdentifierError("self_purchased must be a boolean")
+
+    params: dict[str, str | int | bool | None] = {
+        "keyword": query,
+        "sortType": sort,
+        "page": page,
+        "itemCount": item_count,
+    }
+    if since is not None:
+        params["startDate"] = since
+    if until is not None:
+        params["endDate"] = until
+    if self_purchased:
+        params["isBuyWithMyOwnMoney"] = "true"
+    return RequestSpec(url=MOBILE_SEARCH_POST, params=params)
+
+
+def mobile_tag_search(
     query: str,
     *,
     page: int = 1,
-    sort: str = "recentdate",
+    item_count: int = SEARCH_MAX_ITEM_COUNT,
 ) -> RequestSpec:
-    """Build the LEGACY HTML in-blog post-search request."""
+    """Build a mobile ``/api/tags/search/post`` request.
+
+    Not ``/api/search/v1/tag``: that one answers with tag *groups*
+    (``{postCount, tag, blogs:[...]}``), which are not posts. This one is a flat post list.
+    """
     query = _required_text(query, "search query")
     _positive_int(page, "page")
-    if not isinstance(sort, str) or sort != "recentdate":
-        raise InvalidIdentifierError("invalid in-blog search sort")
+    _search_item_count(item_count)
     return RequestSpec(
-        url=LEGACY_POST_SEARCH_LIST,
-        params={
-            "blogId": parse_blog_ref(blog_id).blog_id,
-            "SearchText": query,
-            "orderBy": sort,
-            "currentPage": page,
-        },
+        url=MOBILE_TAG_SEARCH,
+        params={"query": query, "page": page, "itemCount": item_count},
     )
+
+
+def in_blog_search(
+    blog_id: str | BlogRef,
+    query: str,
+    *,
+    sort: str = "sim",
+    page: int = 1,
+) -> RequestSpec:
+    """Build a mobile in-blog post-search request.
+
+    Two names here resist guessing and were both measured: the trailing path segment is
+    ``post`` — the bundle's ``inBlogPost`` enum value is a UI mode name and redirects to an
+    error page — and the term parameter is ``query``; sending ``keyword`` returns HTTP 500.
+    """
+    query = _required_text(query, "search query")
+    if not isinstance(sort, str) or sort not in _SEARCH_SORTS:
+        raise InvalidIdentifierError("invalid in-blog search sort")
+    _positive_int(page, "page")
+    return RequestSpec(
+        url=_mobile_url(blog_id, "search/post"),
+        params={"query": query, "sortType": sort, "page": page},
+    )
+
+
+def _search_item_count(value: object) -> None:
+    _positive_int(value, "item count")
+    if isinstance(value, int) and value > SEARCH_MAX_ITEM_COUNT:
+        raise InvalidIdentifierError("item count must not exceed 30")
 
 
 def _mobile_url(blog_id: str | BlogRef, endpoint: str) -> str:

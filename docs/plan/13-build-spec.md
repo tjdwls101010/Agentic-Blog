@@ -102,9 +102,16 @@ GET /api/search/v1/{post|tag}
 - `periodType`은 **보내지 마세요.** 번들이 안 보냅니다. UI 전용 개념이고 실제 파라미터는
   `startDate`/`endDate`입니다. 넣어도 결과가 안 변하는 것을 확인했습니다(12,087,040 동일).
 
-`--type tag`는 `/api/search/v1/tag`로도, `/api/tags/search/post`로도 갈 수 있습니다. **전자를 쓰세요** —
-`search`의 다른 타입과 같은 봉투·같은 파라미터·같은 정렬이라 코드 경로가 하나로 유지됩니다.
-(`/api/tags/search/post`는 `page`/`itemCount`에 별도 봉투를 쓰고 `items[]` 키가 다릅니다.)
+> **정정 (구현 중 발견, 2026-07-25).** 이 문단은 원래 `--type tag`에 `/api/search/v1/tag`를 쓰라고
+> 했습니다. **틀렸고, 구현은 `/api/tags/search/post`로 나갔습니다.**
+>
+> 근거는 "봉투가 같다"였는데, 봉투만 확인하고 **항목을 확인하지 않은** 판단이었습니다. 실제 캡처로
+> 픽스처를 만들자마자 드러났습니다: `/api/search/v1/tag`가 돌려주는 건 글이 아니라 **태그 그룹**
+> (`{postCount, videoCount, momentCount, tag, blogs:[…]}`)이고, 중첩된 글 카드는 **세 번째 하이라이트
+> 클래스**(`<em class="srch">`)를 씁니다. `search`의 `Post | Blog` 계약을 만족할 수 없는 모양입니다.
+>
+> `/api/tags/search/post`가 평평한 글 목록이고(항목 키 17개, `items[]`, `page`), 페이징도 정상입니다.
+> **봉투 검증은 페이로드 검증이 아닙니다** — 이 프로젝트가 이미 두 번 데인 실패의 세 번째 변주입니다.
 
 ### 2.2 블로그 내 검색 — `m.blog.naver.com`
 

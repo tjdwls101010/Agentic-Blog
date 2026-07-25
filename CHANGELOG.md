@@ -6,7 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-25
+
 ### Added
+
+- `search --self-purchased` keeps only posts whose author labelled them 내돈내산 — bought with their own money. It narrows hard: one measured query went from 1,178,608 posts to 3,397, an entirely different result set. It is the blogger's own declaration and not a verification, so it narrows the pool of reviews rather than cleaning it; absence of the label means very little, since most honest posts never carry one.
+- `search --type tag` searches the tags authors filed their posts under, rather than the full text. Fewer results than `--type post`, but each is a post someone considered to be *about* the term instead of one that merely mentions it. Tag results carry a leaner card — `blog_no`, `blog_name`, and `category_name` are null, because Naver's tag index does not supply them — but every handle needed to chain onward is present.
+
+### Changed
+
+- `search --type post` now reads Naver's mobile search API. It returns the same posts in the same order — verified identical for the top 20 across four queries — while filling `blog_no`, `category_name`, `comment_count`, `like_count`, and `thumbnail_url`, which the previous source did not supply and which therefore came back null. No field was added, removed, or retyped. `--type blog` and `--type id` deliberately stay on the section API: its blog index is a different and larger corpus (15,441 results against 5,611 for one query) and the mobile blog card carries no description, so moving them would have silently emptied `Blog.description`.
+- `posts --query` now uses Naver's in-blog search API instead of scraping the PC search page. Pages carry 20 posts instead of 10 and arrive already populated, so the second request that used to be needed to fill each result is gone — the same answer now costs fewer requests. This also removes the last place where a Naver template change could break a whole command rather than one field. As a result the same five fields listed above are populated here too, and `--query` now accepts `--raw`, which it previously rejected because there was no upstream object to hand back.
+
+### Fixed
+
+- `Blog.post_count` and `Blog.buddy_count` are populated. Both were documented in the output schema and both were null in every output of every command since the first release: no `Blog` constructor ever assigned them, although the response validator had been checking the upstream values all along and discarding them. `buddy_count` reports the neighbours a blog **publicly discloses**, which is what `buddies` can actually enumerate; Naver keeps a second and usually far larger total visible only to the blog's owner, so `0` here means "publishes no neighbour list" rather than "has no neighbours".
+- `posts`, `blog`, and `posts --query` no longer abort on posts whose teaser ends mid-emoji. Naver truncates `briefContents` at a fixed length, and when the cut falls between the two halves of an emoji it ships the first half alone. An unpaired surrogate has no UTF-8 encoding, so writing the results raised `UnicodeEncodeError` and killed the command instead of degrading one field. Found by the pre-release sweep on 3 of 30 blogs; present in every release before this one.
+
+### Added (repository)
 
 - A `naver-blog` Claude Code skill at `.claude/skills/naver-blog/`, so Claude can chain the CLI's single-target primitives into multi-hop answers. Not part of the PyPI distribution.
 

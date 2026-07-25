@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlsplit
 
 from lxml import etree
 from lxml import html as lxml_html
@@ -13,7 +12,7 @@ from lxml import html as lxml_html
 from .errors import BodyParseError
 from .model import Media
 
-__all__ = ["BodyResult", "PostSearchCard", "parse_post_body", "parse_post_search"]
+__all__ = ["BodyResult", "parse_post_body"]
 
 
 @dataclass(frozen=True)
@@ -23,18 +22,6 @@ class BodyResult:
     markdown: str
     media: tuple[Media, ...]
     created_at: datetime | None = None
-
-
-@dataclass(frozen=True)
-class PostSearchCard:
-    """One anchored PostSearchList.naver result before model normalization."""
-
-    blog_id: str
-    log_no: str
-    url: str
-    title: str
-    brief: str | None
-    created_at: datetime | None
 
 
 _CLASS = "concat(' ', normalize-space(@class), ' ')"
@@ -231,16 +218,6 @@ def parse_post_body(source: str) -> BodyResult:
     raise _drift("a SmartEditor ONE container with components or div.post_ct#viewTypeSelector")
 
 
-def _search_container(document: etree._Element) -> etree._Element | None:
-    candidates = document.xpath(
-        "descendant-or-self::*["
-        f"@id = 'postSearchList' or @id = 'post-area' or {_class('post_search_list')} "
-        f"or {_class('post-search-list')}"
-        "]"
-    )
-    return candidates[0] if len(candidates) == 1 else None
-
-
 def _korean_wall_clock(value: str, expected: str) -> datetime:
     """Parse a Naver-rendered date as the Korean wall-clock time it actually is."""
     match = _DATETIME.fullmatch(value) or _DATE.fullmatch(value)
@@ -250,18 +227,6 @@ def _korean_wall_clock(value: str, expected: str) -> datetime:
         return datetime(*(int(part) for part in match.groups()), tzinfo=KST)
     except ValueError as error:
         raise _drift("a valid post date") from error
-
-
-def _card_date(node: etree._Element) -> datetime | None:
-    dates = node.xpath(
-        f".//*[{_class('date')} or {_class('txt_date')} or {_class('post_date')} "
-        f"or {_class('eng')}]"
-    )
-    if not dates:
-        return None
-    return _korean_wall_clock(
-        _node_text(dates[0]), "a YYYY. M. D. or YYYY/MM/DD HH:MM post-result date"
-    )
 
 
 def _body_date(document: etree._Element) -> datetime | None:
@@ -284,84 +249,3 @@ def _body_date(document: etree._Element) -> datetime | None:
             return None
         return _korean_wall_clock(value, "a YYYY. M. D. HH:MM post publish date")
     return None
-
-
-def _post_link(node: etree._Element) -> tuple[str, str, str] | None:
-    for anchor in node.xpath(".//a[@href] | self::a[@href]"):
-        url = anchor.get("href")
-        if not url:
-            continue
-        split = urlsplit(url)
-        query = parse_qs(split.query)
-        blog_id = query.get("blogId", [None])[0]
-        log_no = query.get("logNo", [None])[0]
-        if blog_id is None:
-            path_parts = [part for part in split.path.split("/") if part]
-            if path_parts and path_parts[0] != "PostView.naver":
-                blog_id = path_parts[0]
-        if blog_id and log_no:
-            return blog_id, log_no, url
-    return None
-
-
-def _live_search_cards(container: etree._Element) -> list[etree._Element]:
-    title_links = container.xpath(f".//a[{_class('s_link')} and contains(@href, 'logNo=')]")
-    cards: list[etree._Element] = []
-    for link in title_links:
-        card = next(
-            (
-                ancestor
-                for ancestor in link.iterancestors("table")
-                if len(ancestor.xpath("./tr")) >= 2
-            ),
-            None,
-        )
-        if card is None:
-            raise _drift("a two-row legacy in-blog search result card")
-        cards.append(card)
-    return cards
-
-
-def parse_post_search(source: str) -> tuple[PostSearchCard, ...]:
-    """Extract only anchored in-blog search result cards from PostSearchList.naver."""
-    container = _search_container(_document(source))
-    if container is None:
-        raise _drift("one PostSearchList.naver result container")
-
-    live_variant = container.get("id") == "post-area"
-    cards = _live_search_cards(container) if live_variant else container.xpath("./ul/li | .//ul/li")
-    if not cards:
-        empty = container.xpath(
-            f".//*[{_class('no_result')} or {_class('no_data')} or {_class('search_none')}]"
-        )
-        has_measured_empty = any(
-            "검색결과가 없습니다" in _node_text(node)
-            for node in (empty or container.xpath(".//strong"))
-        )
-        if has_measured_empty:
-            return ()
-        raise _drift("post result cards or the explicit empty-result marker")
-
-    results: list[PostSearchCard] = []
-    for card in cards:
-        link = _post_link(card)
-        if link is None:
-            raise _drift("an anchored post result link with blogId and logNo")
-        blog_id, log_no, url = link
-        if live_variant:
-            title_node = card.xpath(f".//a[{_class('s_link')} and contains(@href, 'logNo=')]")
-            rows = card.xpath("./tr")
-            brief = _node_text(rows[1]) if len(rows) >= 2 else None
-        else:
-            title_node = card.xpath(
-                f".//*[{_class('title')} or {_class('tit_post')} or {_class('title_post')}]"
-            )
-            brief_node = card.xpath(
-                f".//*[{_class('brief')} or {_class('desc')} or {_class('txt')}]"
-            )
-            brief = _node_text(brief_node[0]) if brief_node else None
-        title = _node_text(title_node[0]) if title_node else ""
-        if not title:
-            raise _drift("a non-empty post-result title")
-        results.append(PostSearchCard(blog_id, log_no, url, title, brief or None, _card_date(card)))
-    return tuple(results)

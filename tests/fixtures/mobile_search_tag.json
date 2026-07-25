@@ -1,0 +1,73 @@
+{
+  "isSuccess": true,
+  "result": {
+    "page": 1,
+    "totalCount": 1432168,
+    "items": [
+      {
+        "blogId": "synthetic_blog_3",
+        "logNo": 224357779186,
+        "nickname": "예시사용자",
+        "title": "합성 예시 문자열 6",
+        "content": "합성 예시 문자열 7",
+        "thumbnailUrl": null,
+        "thumbnailCount": 0,
+        "commentCount": 0,
+        "sympathyCount": 0,
+        "isMarketPost": false,
+        "isThisDayPost": false,
+        "product": null,
+        "addDate": 1784986500000,
+        "commentVisible": true,
+        "videoThumbnail": false,
+        "sympathyVisible": true,
+        "vrThumbnail": false
+      },
+      {
+        "blogId": "synthetic_blog_4",
+        "logNo": 224357779330,
+        "nickname": "가상사용자",
+        "title": "합성 예시 문자열 7",
+        "content": "합성 예시 문자열 8",
+        "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/synthetic/9.jpg",
+        "thumbnailCount": 32,
+        "commentCount": 0,
+        "sympathyCount": 3,
+        "isMarketPost": false,
+        "isThisDayPost": false,
+        "product": null,
+        "addDate": 1784986500000,
+        "commentVisible": true,
+        "videoThumbnail": false,
+        "sympathyVisible": true,
+        "vrThumbnail": false
+      },
+      {
+        "blogId": "synthetic_blog_5",
+        "logNo": 224357778860,
+        "nickname": "샘플사용자",
+        "title": "합성 예시 문자열 8",
+        "content": "합성 예시 문자열 9",
+        "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/synthetic/10.jpg",
+        "thumbnailCount": 38,
+        "commentCount": 0,
+        "sympathyCount": 2,
+        "isMarketPost": false,
+        "isThisDayPost": false,
+        "product": null,
+        "addDate": 1784986440000,
+        "commentVisible": true,
+        "videoThumbnail": false,
+        "sympathyVisible": true,
+        "vrThumbnail": false
+      }
+    ],
+    "suicideWord": false,
+    "adult": false,
+    "adultUser": false,
+    "authUrlType": "https://example.invalid/synthetic_7",
+    "forbidden": false,
+    "hasVideoTab": true,
+    "blockedByBifrostShield": false
+  }
+}

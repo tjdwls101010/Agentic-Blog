@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from dataclasses import fields
 from datetime import UTC, datetime, timedelta, timezone
@@ -25,6 +26,7 @@ from agentic_blog.model import (
     build_comment,
     build_directory_post,
     build_mobile_post,
+    build_mobile_search_post,
     build_search_blog,
     build_search_id,
     build_search_post,
@@ -969,3 +971,89 @@ def test_an_unobserved_notice_open_type_is_reported_as_unknown() -> None:
     post = build_mobile_post(node, captured_at=_CAPTURED_AT, kind="notice", is_notice=True)
 
     assert post.visibility is None
+
+
+@pytest.mark.parametrize(
+    ("fixture", "array_key"),
+    [
+        ("mobile_search_post.json", "list"),
+        ("mobile_search_self_purchased.json", "list"),
+        ("mobile_search_tag.json", "items"),
+        ("in_blog_search.json", "list"),
+    ],
+)
+def test_mobile_search_builder_handles_every_live_card_shape(fixture, array_key) -> None:
+    """Each fixture's key set was copied mechanically from a real capture.
+
+    The three surfaces do not agree on their field names — only in-blog search says
+    ``contents`` instead of ``content``, and tag search omits blogNo/url/blogName/
+    categoryName outright — which is exactly the kind of divergence a hand-written fixture
+    would have smoothed over.
+    """
+    cards = load_fixture(fixture)["result"][array_key]
+    assert cards
+
+    for card in cards:
+        post = build_mobile_search_post(card, captured_at=_CAPTURED_AT)
+
+        jsonschema.Draft202012Validator(json_schema()["$defs"]["Post"]).validate(post.to_dict())
+        assert post.blog_id and post.log_no
+        assert post.url.startswith("http")
+        assert post.body is None  # a listing never carries body
+        assert "<em" not in post.title and "<strong" not in post.title
+        if post.brief is not None:
+            assert "<em" not in post.brief
+
+
+def test_mobile_search_builder_reads_the_summary_under_either_name() -> None:
+    global_card = {"blogId": "b", "logNo": 1, "title": "t", "content": "요약"}
+    in_blog_card = {"blogId": "b", "logNo": 1, "title": "t", "contents": "요약"}
+
+    assert build_mobile_search_post(global_card, captured_at=_CAPTURED_AT).brief == "요약"
+    assert build_mobile_search_post(in_blog_card, captured_at=_CAPTURED_AT).brief == "요약"
+
+
+_ANGLE_QUOTED_TITLE = "MMCA 서울 <이것은 개념미술이 (아니)다> 전시회 후기"
+_ANGLE_QUOTED_TITLE_2 = "더현대서울 ALT.1 <뱅크시: still here> 전시회 후기"
+
+
+@pytest.mark.parametrize(
+    ("raw_title", "expected"),
+    [
+        ('<em class="highlight">제주</em> 여행', "제주 여행"),
+        ('<strong class="search_keyword">제주</strong> 여행', "제주 여행"),
+        # Korean titles quote works in angle brackets; stripping these would corrupt them.
+        (_ANGLE_QUOTED_TITLE, _ANGLE_QUOTED_TITLE),
+        (_ANGLE_QUOTED_TITLE_2, _ANGLE_QUOTED_TITLE_2),
+        # An em that is not a search highlight is content, not markup to unwrap.
+        ("<em>강조</em> 유지", "<em>강조</em> 유지"),
+    ],
+)
+def test_search_text_strips_only_real_highlight_markup(raw_title, expected) -> None:
+    card = {"blogId": "b", "logNo": 1, "title": raw_title}
+
+    assert build_mobile_search_post(card, captured_at=_CAPTURED_AT).title == expected
+
+
+def test_display_text_drops_the_orphan_surrogate_naver_truncation_leaves() -> None:
+    """Naver cuts briefContents mid-emoji, stranding a high surrogate before the ellipsis.
+
+    Measured live on an ordinary blog: the teaser ended '즐기기 좋아요 \ud83d...'. An unpaired
+    surrogate has no UTF-8 encoding, so serializing it raised UnicodeEncodeError and aborted
+    the whole command rather than degrading one field.
+    """
+    card = {"blogId": "b", "logNo": 1, "title": "t", "content": "즐기기 좋아요 \ud83d..."}
+
+    post = build_mobile_search_post(card, captured_at=_CAPTURED_AT)
+
+    assert post.brief == "즐기기 좋아요 ..."
+    json.dumps(post.to_dict(), ensure_ascii=False).encode("utf-8")
+
+
+def test_display_text_keeps_whole_emoji_intact() -> None:
+    card = {"blogId": "b", "logNo": 1, "title": "맛있어요 😍💛", "content": "🎉 축하"}
+
+    post = build_mobile_search_post(card, captured_at=_CAPTURED_AT)
+
+    assert post.title == "맛있어요 😍💛"
+    assert post.brief == "🎉 축하"

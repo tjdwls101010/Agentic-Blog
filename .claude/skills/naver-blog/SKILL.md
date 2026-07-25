@@ -1,6 +1,6 @@
 ---
 name: Naver Blog retrieval
-description: Read Naver Blog (네이버 블로그) with the agentic-blog CLI — search posts and blogs, open a blog's category tree, list or search one blog's own posts, read a post's full body and its comment thread, browse the directory's topics, and walk the neighbour (이웃) graph — then chain those to answer multi-hop questions. Use whenever the user wants something off Naver Blog, however they phrase it: "네이버 블로그에서 X 찾아줘", "이 블로그 글 읽어줘", "X 후기 좀 모아줘", "이 블로거가 X에 대해 뭐라고 썼어?", "이 사람 주변에선 무슨 얘기해?", "요즘 블로그에서 뭐가 인기야?", or when they hand over a blog.naver.com or m.blog.naver.com URL. Also use when the user wants Korean first-hand opinion — 후기, 리뷰, 방문기, 내돈내산 — about a product, place, restaurant, or trip and has not named a source, because Naver Blog is where that lives. NOT for other blog platforms: Tistory, Velog, brunch, Medium, WordPress, Substack. NOT for other Naver services — 카페, 지식iN, 뉴스, 포스트, 쇼핑, 플레이스 are different products with no tool here. NOT for developing, testing, or releasing the agentic-blog package itself, which is ordinary repo work.
+description: Read Naver Blog (네이버 블로그) with the agentic-blog CLI — search posts, blogs, people, and 태그, filter reviews down to self-declared 내돈내산 posts, open a blog's category tree, list or search one blog's own posts, read a post's full body and its comment thread, browse the directory's topics, and walk the neighbour (이웃) graph — then chain those to answer multi-hop questions. Use whenever the user wants something off Naver Blog, however they phrase it: "네이버 블로그에서 X 찾아줘", "이 블로그 글 읽어줘", "X 후기 좀 모아줘", "이 블로거가 X에 대해 뭐라고 썼어?", "이 사람 주변에선 무슨 얘기해?", "요즘 블로그에서 뭐가 인기야?", or when they hand over a blog.naver.com or m.blog.naver.com URL. Also use when the user wants Korean first-hand opinion — 후기, 리뷰, 방문기, 내돈내산 — about a product, place, restaurant, or trip and has not named a source, because Naver Blog is where that lives. NOT for other blog platforms: Tistory, Velog, brunch, Medium, WordPress, Substack. NOT for other Naver services — 카페, 지식iN, 뉴스, 포스트, 쇼핑, 플레이스 are different products with no tool here. NOT for developing, testing, or releasing the agentic-blog package itself, which is ordinary repo work.
 allowed-tools: Bash(agentic-blog:*), Bash(uv:*), Bash(pipx:*), Bash(curl:*), Read
 ---
 
@@ -115,8 +115,11 @@ what someone wrote, you need `body`, which means you need a `post` call.
   time for the same post, so `search` or `posts` is where to get it when you need it.
 - **`captured_at` is when *you* scraped.** Sorting or deduplicating by it produces an ordering that
   means nothing.
-- **`Blog.post_count` and `Blog.buddy_count` are null**, even from `blog`. The per-category
-  `post_count` inside the category tree is where real numbers live.
+- **`Blog.buddy_count` counts only the neighbours the blog *discloses*.** Naver keeps a second,
+  usually much larger total that it shows nobody but the owner — one measured blog publishes 0 of
+  its 1,908. So `buddy_count: 0` means "this blog does not publish its neighbour list", not "this
+  person has no neighbours", and it will agree with what `buddies` returns rather than contradict
+  it. Treating it as reach or popularity will be wrong by an order of magnitude on most blogs.
 
 ## Navigating
 
@@ -137,6 +140,13 @@ Worked chains, with the judgment that matters at each hop:
 
 **"X 후기 찾아줘"** — `search --type post`, then `post` the two or three most promising. The
 judgment is which ones are worth spending a read on, not how many results to collect.
+
+**`--type post` vs `--type tag`** — these index different things, so the choice is about what kind
+of match you want. Post search reads the whole text, so it finds anything that *mentions* X, with
+the recall and the false positives that implies. Tags are what the author chose to file the post
+under: fewer results, but each one is a post someone considered to be *about* X. When a broad search
+drowns in passing mentions, the tag axis is the sharper instrument; when a topic is niche enough
+that few people tag it, it is the wrong one. Neither dominates, and nothing stops you trying both.
 
 **"이 블로거 어떤 사람이야?"** — `blog` first. The **category tree is the best single summary of a
 Naver blog**: its shape and per-category post counts describe what someone actually writes about
@@ -163,6 +173,12 @@ fragment presented as one.
 - **`max_requests`** — the per-invocation request budget stopped it, not the data. The result is
   partial and reporting it as complete is simply wrong.
 
+One more end exists that no `stop_reason` distinguishes: **Naver's search stops handing out results
+after about a thousand posts per query**, however many it claims to have matched. So `no_next_page`
+on a broad search means "the index stopped answering", not "you have them all", and "전부 모았다" is
+never true of a popular keyword. When exhaustiveness is what the user actually wants, narrowing the
+query — a date window, a tag, one blog — reaches deeper than paging ever will.
+
 ## What a chain costs
 
 Every hop is a real request against a 0.5s floor, with a budget of 100 requests per invocation. A
@@ -176,12 +192,24 @@ answer wearing a confident summary. Say which hops you took and how many you ski
 Size every `--limit` from the question being asked. "Is this blog active" needs a handful of posts;
 "what has she argued about this month" needs a date window and more.
 
-## Sponsored content
+## Sponsored content, and what `--self-purchased` does and does not promise
 
 Naver Blog's review corpus is saturated with 협찬 / 체험단 / 광고 posts, and **Naver publishes no
-`is_ad` field** — check `schema`, there is none, because Naver does not reliably expose one. So
-judgment is the only instrument available here, and a judgment the reader cannot see is a judgment
-they cannot check.
+`is_ad` field** — check `schema`, there is none, because Naver does not reliably expose one.
+
+What Naver does publish is the *opposite* claim, and only when a blogger volunteers it.
+`search --self-purchased` keeps posts the author labelled 내돈내산 — bought with their own money.
+It is a real filter and a strong one: on one measured query it cut 1.2M posts to 3,397, an entirely
+different result set. But it is **the blogger's own declaration, not Naver's verification**, and the
+two failure directions are not symmetric:
+
+- Its **presence** does not certify that nothing was sponsored. Nobody audits the claim.
+- Its **absence** says almost nothing. Most honest posts never bother with the label.
+
+So this narrows the pool; it does not clean it. Describing those results as "광고 없는 후기" claims a
+guarantee that does not exist — "본인이 내돈내산이라고 밝힌 글" is the sentence that is actually true.
+Judgment stays the instrument, applied to a smaller pile, and a judgment the reader cannot see is a
+judgment they cannot check.
 
 Signals worth weighing before spending a `post` call: disclosure language in the body, a category
 tree that is entirely product reviews, a posting cadence too uniform to be a person's actual life.

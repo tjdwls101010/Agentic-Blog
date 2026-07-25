@@ -66,7 +66,7 @@ offline and write to stdout.
 
 | Command | Purpose | Command-specific options |
 | --- | --- | --- |
-| `search <query>` | Search public Naver Blog posts or blogs. | `--type {post,blog,id}` (default `post`); `--sort {sim,date}` (default `sim`); `--since YYYY-MM-DD`; `--until YYYY-MM-DD` |
+| `search <query>` | Search public Naver Blog posts, blogs, people, or tags. | `--type {post,blog,id,tag}` (default `post`); `--self-purchased` (내돈내산, `--type post` only); `--sort {sim,date}` (default `sim`); `--since YYYY-MM-DD`; `--until YYYY-MM-DD` |
 | `blog <blog_id>` | Read one public blog profile and category tree. | — |
 | `posts <blog_id>` | List public posts from a blog. | `--category N` (default `0`, all); `--sort {recent,popular}` (default `recent`); `--notices`; `--query TEXT` |
 | `post <url-or-blog_id> [log_no]` | Read one public post body and, by default, its full comment thread. | `--no-comments`; `--comment-sort {new,favorite}` (default `new`); `--comment-limit N` |

@@ -13,23 +13,25 @@ from agentic_blog.retrieve import RetrieveResult
 
 def _post(log_no="1"):
     return {
-        "logNo": log_no,
-        "blogNo": "1",
-        "domainIdOrBlogId": "blog",
+        "logNo": int(log_no),
+        "blogNo": 1,
+        "blogId": "blog",
         "title": "한국어 제목",
-        "contents": "한국어 요약",
+        "content": "한국어 요약",
         "addDate": 1_700_000_000_000,
     }
 
 
 def _page(items):
+    """One m.blog search page — the envelope `search` (and `--type post`) now reads."""
     return {
+        "isSuccess": True,
         "result": {
-            "searchDisplayInfo": {},
-            "searchList": items,
-            "totalCount": len(items),
-            "pagePerCount": 7,
-        }
+            "list": items,
+            "currentPage": 1,
+            "totalCount": 12_356_134,
+            "totalPage": 411_872,
+        },
     }
 
 
@@ -320,7 +322,7 @@ def test_search_malformed_card_exits_four_with_a_redacted_typed_diagnostic(monke
 
     stderr = capsys.readouterr().err
     assert stderr.startswith(
-        "EnvelopeParseError: response envelope drift at response.result.searchList[0]"
+        "EnvelopeParseError: response envelope drift at response.result.list[0]"
     )
     assert "secret@example.com" not in stderr
 
@@ -420,18 +422,17 @@ def test_phase3_cli_rejects_unsupported_or_incompatible_grammar(argv, capsys):
     assert "error:" in capsys.readouterr().err
 
 
-def test_posts_query_raw_is_rejected_as_usage_before_client_creation(monkeypatch, capsys):
+def test_posts_query_still_rejects_incompatible_grammar_before_client_creation(monkeypatch):
     monkeypatch.setattr(
         cli,
         "ReadClient",
-        lambda: pytest.fail("query raw validation must run before client creation"),
+        lambda: pytest.fail("query grammar validation must run before client creation"),
     )
 
     with pytest.raises(SystemExit) as raised:
-        cli.main(["posts", "blog", "--query", "coffee", "--raw"])
+        cli.main(["posts", "blog", "--query", "coffee", "--notices"])
 
     assert raised.value.code == 1
-    assert capsys.readouterr().err.endswith("agentic-blog: error: --query does not support --raw\n")
 
 
 def test_phase3_commands_are_catalogued_with_concrete_output_types():

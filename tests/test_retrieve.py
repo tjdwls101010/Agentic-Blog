@@ -53,6 +53,40 @@ def post(log_no, blog_id="blog"):
     }
 
 
+MOBILE_PAGE_SIZE = 30
+IN_BLOG_PAGE_SIZE = 20
+
+
+def mpost(log_no, blog_id="blog"):
+    """One m.blog search card."""
+    return {
+        "logNo": int(log_no),
+        "blogId": blog_id,
+        "title": f"post {log_no}",
+        "content": "",
+        "addDate": 1_700_000_000_000,
+    }
+
+
+def mpage(items):
+    """One m.blog search page, carrying the totals the live host actually reports.
+
+    totalCount and totalPage are deliberately the measured, misleading values: the host
+    advertises millions of results across hundreds of thousands of pages and then stops
+    answering after 1,000. Every test using this page therefore also proves that paging
+    is driven by page length rather than by either total.
+    """
+    return {
+        "isSuccess": True,
+        "result": {
+            "list": items,
+            "currentPage": 1,
+            "totalCount": 12_356_134,
+            "totalPage": 411_872,
+        },
+    }
+
+
 def page(items, *, count=7):
     return {
         "result": {
@@ -84,18 +118,23 @@ def buddy_page(cards, *, current_page, total_page_count):
 
 def test_search_paginates_deduplicates_and_stops_on_short_page():
     client = FakeClient(
-        [page([post(str(value)) for value in range(7)]), page([post("6"), post("7")])]
+        [
+            mpage([mpost(value) for value in range(MOBILE_PAGE_SIZE)]),
+            mpage([mpost(MOBILE_PAGE_SIZE - 1), mpost(MOBILE_PAGE_SIZE)]),
+        ]
     )
 
     result = search(client, "coffee")
 
-    assert [item.log_no for item in result.items] == [str(value) for value in range(8)]
+    assert [item.log_no for item in result.items] == [
+        str(value) for value in range(MOBILE_PAGE_SIZE + 1)
+    ]
     assert result.stop_reason == "no_next_page"
-    assert [spec.params["currentPage"] for spec in client.specs] == [1, 2]
+    assert [spec.params["page"] for spec in client.specs] == [1, 2]
 
 
 def test_search_limit_and_zero_limit_are_bounded():
-    client = FakeClient([page([post(str(value)) for value in range(7)])])
+    client = FakeClient([mpage([mpost(value) for value in range(MOBILE_PAGE_SIZE)])])
 
     result = search(client, "coffee", limit=2)
     zero = search(FakeClient([]), "coffee", limit=0)
@@ -110,16 +149,18 @@ def test_search_limit_and_zero_limit_are_bounded():
 
 def test_search_reports_limit_reached_only_when_pagination_can_continue():
     full_page = search(
-        FakeClient([page([post(str(value)) for value in range(7)])]), "coffee", limit=7
+        FakeClient([mpage([mpost(value) for value in range(MOBILE_PAGE_SIZE)])]),
+        "coffee",
+        limit=MOBILE_PAGE_SIZE,
     )
-    short_page = search(FakeClient([page([post("1"), post("2")])]), "coffee", limit=2)
+    short_page = search(FakeClient([mpage([mpost(1), mpost(2)])]), "coffee", limit=2)
 
     assert full_page.stop_reason == "limit_reached"
     assert short_page.stop_reason == "no_next_page"
 
 
 def test_search_reports_no_next_page_for_a_duplicate_short_page_tail():
-    client = FakeClient([page([post("1"), post("2"), post("1")])])
+    client = FakeClient([mpage([mpost(1), mpost(2), mpost(1)])])
 
     result = search(client, "coffee", limit=2)
 
@@ -129,7 +170,7 @@ def test_search_reports_no_next_page_for_a_duplicate_short_page_tail():
 
 
 def test_search_reports_limit_reached_for_an_unseen_short_page_tail():
-    client = FakeClient([page([post("1"), post("2"), post("3")])])
+    client = FakeClient([mpage([mpost(1), mpost(2), mpost(3)])])
 
     result = search(client, "coffee", limit=2)
 
@@ -140,7 +181,9 @@ def test_search_reports_limit_reached_for_an_unseen_short_page_tail():
 
 def test_search_reports_budget_exhaustion_after_a_full_page():
     result = search(
-        FakeClient([page([post(str(value)) for value in range(7)])], remaining_requests=1),
+        FakeClient(
+            [mpage([mpost(value) for value in range(MOBILE_PAGE_SIZE)])], remaining_requests=1
+        ),
         "coffee",
     )
 
@@ -149,7 +192,7 @@ def test_search_reports_budget_exhaustion_after_a_full_page():
 
 
 def test_search_uses_a_per_search_request_delta_for_reused_clients():
-    client = FakeClient([page([post("1")]), page([post("2")])])
+    client = FakeClient([mpage([mpost(1)]), mpage([mpost(2)])])
     client.requests_made = 12
     client.remaining_requests = 8
 
@@ -184,7 +227,7 @@ def test_search_rejects_client_counters_that_do_not_track_each_request():
             return next(self.pages)
 
     with pytest.raises(ValueError, match="advance by one"):
-        search(StaleCounterClient([page([post("1")])]), "coffee")
+        search(StaleCounterClient([mpage([mpost(1)])]), "coffee")
 
 
 def test_search_propagates_client_dependency_errors():
@@ -226,7 +269,7 @@ def test_search_stops_before_a_client_budget_is_exceeded():
 
 
 def test_search_reports_no_matches():
-    result = search(FakeClient([page([])]), "coffee")
+    result = search(FakeClient([mpage([])]), "coffee")
 
     assert result.items == []
     assert result.stop_reason == "no_matches"
@@ -255,7 +298,6 @@ def test_search_builds_blogs_for_blog_and_id_types():
 @pytest.mark.parametrize(
     ("search_type", "node"),
     [
-        ("post", {"blogNo": "1", "domainIdOrBlogId": "blog"}),
         (
             "blog",
             {
@@ -282,31 +324,36 @@ def test_search_normalizes_malformed_section_cards(search_type, node):
         match=re.escape("response.result.searchList[0]"),
     ):
         search(
-            FakeClient([page([node], count=10 if search_type != "post" else 7)]),
+            FakeClient([page([node], count=10)]),
             "coffee",
             search_type=search_type,
         )
 
 
+def test_search_normalizes_malformed_mobile_cards():
+    with pytest.raises(EnvelopeParseError, match=re.escape("response.result.list[0]")):
+        search(FakeClient([mpage([{"logNo": 1, "blogId": "blog", "title": []}])]), "coffee")
+
+
 def test_search_normalizes_malformed_tail_card_inspection():
-    malformed_tail = post("2")
-    malformed_tail["commentCnt"] = -1
+    malformed_tail = mpost(2)
+    malformed_tail["commentCount"] = -1
 
     with pytest.raises(
         EnvelopeParseError,
-        match=re.escape("response.result.searchList[1]"),
+        match=re.escape("response.result.list[1]"),
     ):
-        search(FakeClient([page([post("1"), malformed_tail])]), "coffee", limit=1)
+        search(FakeClient([mpage([mpost(1), malformed_tail])]), "coffee", limit=1)
 
 
 def test_search_does_not_mask_internal_builder_defects(monkeypatch):
     def broken_builder(*args, **kwargs):
         raise AssertionError("builder invariant")
 
-    monkeypatch.setattr(retrieve, "build_search_post", broken_builder)
+    monkeypatch.setattr(retrieve, "build_mobile_search_post", broken_builder)
 
     with pytest.raises(AssertionError, match="builder invariant"):
-        search(FakeClient([page([post("1")])]), "coffee")
+        search(FakeClient([mpage([mpost(1)])]), "coffee")
 
 
 def test_fetch_blog_normalizes_identity_cards_before_exact_match():
@@ -325,14 +372,15 @@ def test_fetch_blog_normalizes_identity_cards_before_exact_match():
 
 
 def test_search_propagates_dates_to_the_server_without_filtering():
-    client = FakeClient([page([post("1")])])
+    client = FakeClient([mpage([mpost(1)])])
 
     result = search(client, "coffee", since=date(2026, 7, 1), until=date(2026, 7, 2), raw=True)
 
-    assert result.items[0].raw == post("1")
+    assert result.items[0].raw == mpost(1)
     assert client.specs[0].params["startDate"] == "2026-07-01"
     assert client.specs[0].params["endDate"] == "2026-07-02"
-    assert client.specs[0].params["orderBy"] == "sim"
+    assert client.specs[0].params["sortType"] == "sim"
+    assert "periodType" not in client.specs[0].params
 
 
 @pytest.mark.parametrize(
@@ -356,7 +404,9 @@ def test_phase3_single_target_and_listing_surfaces_use_their_endpoint_contracts(
         "nickName": "Synthetic Alice",
     }
     blog = fetch_blog(
-        FakeClient([page([profile_node], count=10), PHASE3["category_list"]]),
+        FakeClient(
+            [page([profile_node], count=10), PHASE3["category_list"], PHASE3["public_buddies"]]
+        ),
         "synthetic_alice",
     )
     posts = fetch_posts(FakeClient([PHASE3["post_list"]]), "synthetic_alice", category=7)
@@ -470,17 +520,24 @@ def test_fetch_blog_composes_exact_id_profile_categories_and_raw_in_two_requests
         "nickName": "Synthetic Alice",
         "blogDesc": "Measured profile",
     }
-    client = FakeClient([page([profile_node], count=10), PHASE3["category_list"]])
+    client = FakeClient(
+        [page([profile_node], count=10), PHASE3["category_list"], PHASE3["public_buddies"]]
+    )
     client.requests_made = 12
     client.remaining_requests = 8
 
     result = fetch_blog(client, "synthetic_alice", raw=True)
 
     assert result.stop_reason == "single_target"
-    assert result.requests_made == 2
+    assert result.requests_made == 3
     assert result.items[0].blog_id == "synthetic_alice"
     assert result.items[0].categories[0].category_no == "7"
     assert result.items[0].raw == profile_node
+    # Both were validated on the way in and then dropped before 0.2.0.
+    assert result.items[0].post_count == PHASE3["category_list"]["result"]["mylogPostCount"]
+    assert (
+        result.items[0].buddy_count == PHASE3["public_buddies"]["result"]["totalPublicBuddyCount"]
+    )
     assert client.specs[0].params == {
         "type": "id",
         "keyword": "synthetic_alice",
@@ -488,6 +545,7 @@ def test_fetch_blog_composes_exact_id_profile_categories_and_raw_in_two_requests
         "countPerPage": 10,
     }
     assert client.specs[1].url.endswith("/synthetic_alice/category-list")
+    assert client.specs[2].url.endswith("/synthetic_alice/public-buddies")
 
 
 def test_fetch_blog_reserves_the_profile_and_category_budget_and_rejects_non_matches():
@@ -916,27 +974,35 @@ def _post_search_html(log_nos):
     return f'<div id="postSearchList"><ul>{cards}</ul></div>'
 
 
-def test_fetch_posts_query_uses_only_legacy_search_and_deduplicates_pages():
-    client = FakeClient([_post_search_html(range(10)), _post_search_html([9, 10])])
+def test_fetch_posts_query_uses_the_mobile_json_search_and_deduplicates_pages():
+    client = FakeClient(
+        [
+            mpage([mpost(value) for value in range(IN_BLOG_PAGE_SIZE)]),
+            mpage([mpost(IN_BLOG_PAGE_SIZE - 1), mpost(IN_BLOG_PAGE_SIZE)]),
+        ]
+    )
 
     result = fetch_posts(client, "blog", query="coffee")
 
-    assert [post.log_no for post in result.items] == [str(value) for value in range(11)]
+    assert [item.log_no for item in result.items] == [
+        str(value) for value in range(IN_BLOG_PAGE_SIZE + 1)
+    ]
     assert result.stop_reason == "no_next_page"
     assert [spec.url for spec in client.specs] == [
-        "https://blog.naver.com/PostSearchList.naver",
-        "https://blog.naver.com/PostSearchList.naver",
+        "https://m.blog.naver.com/api/blogs/blog/search/post",
+        "https://m.blog.naver.com/api/blogs/blog/search/post",
     ]
-    assert [spec.params["currentPage"] for spec in client.specs] == [1, 2]
+    assert [spec.params["page"] for spec in client.specs] == [1, 2]
+    # `query`, not `keyword` — the host answers 500 to the latter.
+    assert client.specs[0].params["query"] == "coffee"
 
 
-def test_fetch_posts_query_raw_is_rejected_before_requests():
-    client = FakeClient([])
-    with pytest.raises(ValueError, match=r"^query does not support raw$"):
-        fetch_posts(client, "blog", query="coffee", raw=True)
+def test_fetch_posts_query_supports_raw_now_that_the_source_is_json():
+    client = FakeClient([mpage([mpost(1)])])
 
-    assert client.requests_made == 0
-    assert client.specs == []
+    result = fetch_posts(client, "blog", query="coffee", raw=True)
+
+    assert result.items[0].raw == mpost(1)
 
 
 @pytest.mark.parametrize(
@@ -945,3 +1011,99 @@ def test_fetch_posts_query_raw_is_rejected_before_requests():
 def test_fetch_posts_query_rejects_listing_variants(kwargs):
     with pytest.raises(ValueError, match="query"):
         fetch_posts(FakeClient([]), "blog", **kwargs)
+
+
+def test_mobile_search_ignores_the_totals_that_overstate_reachable_depth():
+    """The live host reports millions of results, then stops answering after 1,000.
+
+    A short page is the only honest end-of-results signal here. If paging ever consulted
+    totalPage, this run would demand 411,872 pages and exhaust the request budget instead
+    of returning after two.
+    """
+    client = FakeClient(
+        [
+            mpage([mpost(value) for value in range(MOBILE_PAGE_SIZE)]),
+            mpage([mpost(MOBILE_PAGE_SIZE)]),
+        ]
+    )
+
+    result = search(client, "coffee")
+
+    assert result.stop_reason == "no_next_page"
+    assert len(client.specs) == 2
+    assert len(result.items) == MOBILE_PAGE_SIZE + 1
+
+
+def test_search_routes_each_type_to_the_host_that_can_answer_it():
+    post_client = FakeClient([mpage([mpost(1)])])
+    tag_client = FakeClient([mpage([mpost(1)])])
+    blog_client = FakeClient([page([{"blogNo": "1", "domainIdOrBlogId": "blog"}], count=10)])
+
+    search(post_client, "coffee")
+    search(tag_client, "coffee", search_type="tag")
+    search(blog_client, "coffee", search_type="blog")
+
+    assert post_client.specs[0].url == "https://m.blog.naver.com/api/search/v1/post"
+    assert tag_client.specs[0].url == "https://m.blog.naver.com/api/tags/search/post"
+    # Section keeps blog search: the mobile blog index is a different, smaller corpus and
+    # its card carries no description.
+    assert blog_client.specs[0].url.endswith("SearchList.naver")
+
+
+def test_self_purchased_is_sent_only_when_asked_and_only_for_posts():
+    on = FakeClient([mpage([mpost(1)])])
+    off = FakeClient([mpage([mpost(1)])])
+
+    search(on, "airpods", self_purchased=True)
+    search(off, "airpods")
+
+    assert on.specs[0].params["isBuyWithMyOwnMoney"] == "true"
+    assert "isBuyWithMyOwnMoney" not in off.specs[0].params
+
+    with pytest.raises(ValueError, match="only supported for post searches"):
+        search(FakeClient([]), "airpods", search_type="tag", self_purchased=True)
+
+
+def test_fetch_blog_reports_undisclosed_neighbours_as_zero_not_as_unavailable():
+    """A blog with many neighbours and none disclosed is a real 0, not a missing value.
+
+    Measured live: one blog reports 1,908 neighbours of which 0 are public. Reading that as
+    "no neighbours" would be wrong, and reading it as "field unavailable" would be too.
+    """
+    profile_node = {
+        "blogNo": "20001",
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogName": "Synthetic Alice",
+        "nickName": "Synthetic Alice",
+    }
+    buddies = deepcopy(PHASE3["public_buddies"])
+    buddies["result"]["totalMyBuddyCount"] = 1908
+    buddies["result"]["totalPublicBuddyCount"] = 0
+    buddies["result"]["totalPageCount"] = 0
+    buddies["result"]["currentPage"] = 1
+    buddies["result"]["buddyList"] = []
+
+    result = fetch_blog(
+        FakeClient([page([profile_node], count=10), PHASE3["category_list"], buddies]),
+        "synthetic_alice",
+    )
+
+    assert result.items[0].buddy_count == 0
+
+
+def test_fetch_blog_leaves_buddy_count_unset_rather_than_failing_on_a_spent_budget():
+    profile_node = {
+        "blogNo": "20001",
+        "domainIdOrBlogId": "synthetic_alice",
+        "blogName": "Synthetic Alice",
+        "nickName": "Synthetic Alice",
+    }
+    client = FakeClient(
+        [page([profile_node], count=10), PHASE3["category_list"]], remaining_requests=2
+    )
+
+    result = fetch_blog(client, "synthetic_alice")
+
+    assert result.items[0].post_count is not None
+    assert result.items[0].buddy_count is None
+    assert len(client.specs) == 2

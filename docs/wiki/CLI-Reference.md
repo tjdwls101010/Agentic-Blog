@@ -42,8 +42,9 @@ Searches the Naver Blog section index. `QUERY` must contain non-whitespace text.
 
 | Flag | Meaning |
 | --- | --- |
-| `--type {post,blog,id}` | Search surface; default `post`. `post` emits `Post`; `blog` and `id` emit `Blog`. `id` searches nickname/blog ID. |
-| `--sort {sim,date}` | Section-search order; default `sim`. |
+| `--type {post,blog,id,tag}` | Search surface; default `post`. `post` and `tag` emit `Post`; `blog` and `id` emit `Blog`. `id` searches nickname/blog ID; `tag` searches posts by the tags their authors filed them under. |
+| `--self-purchased` | Keep only posts the author labelled 내돈내산 (bought with their own money). `--type post` only. This is the blogger's own declaration, not a verification that nothing was sponsored. |
+| `--sort {sim,date}` | Result order; default `sim`. Not used by `--type id` or `--type tag`. |
 | `--since YYYY-MM-DD` | Server-side lower date bound, post search only. |
 | `--until YYYY-MM-DD` | Server-side upper date bound, post search only. |
 
@@ -76,9 +77,13 @@ Lists a blog's public posts. These are listing-shaped `Post` records: `brief` ma
 | `--category N` | Non-negative category number; default `0` (all). |
 | `--sort {recent,popular}` | Listing order; default `recent`. |
 | `--notices` | List pinned notice posts instead of the chronological list. |
-| `--query TEXT` | Search posts within this blog using Naver's HTML-backed in-blog search. Text must be non-empty after trimming. |
+| `--query TEXT` | Search posts within this blog using Naver's in-blog search API. Text must be non-empty after trimming. |
 
-`--notices` cannot be combined with `--sort popular`; neither `--notices` nor `--sort popular` can be combined with nonzero `--category`. `--query` cannot be combined with nonzero `--category`, `--sort popular`, or `--notices`. In-blog search is an HTML response parsed into listing records, not the section-search API.
+`--notices` cannot be combined with `--sort popular`; neither `--notices` nor `--sort popular` can be combined with nonzero `--category`. `--query` cannot be combined with nonzero `--category` or `--sort popular`, and not with `--notices`.
+
+`--type tag` returns a leaner card than `--type post`: `blog_no`, `blog_name`, and `category_name` are null because Naver's tag index does not carry them. `blog_id`, `log_no`, `url`, `nickname`, `created_at`, `comment_count`, and `like_count` are all present, so chaining into `post` or `blog` works unchanged.
+
+**Search results stop at roughly 1,000 posts per query** on both `search` and `posts --query`, however many matches Naver reports. Paging ends there, so `no_next_page` on a broad query means the index stopped answering rather than that every match was collected. Narrowing the query reaches deeper than paging does.
 
 ### `buddies BLOG_ID`
 

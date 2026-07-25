@@ -113,7 +113,13 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser = subparsers.add_parser("search", help="Search Naver Blog posts or blogs.")
     search_parser.add_argument("query")
     search_parser.add_argument(
-        "--type", dest="search_type", choices=("post", "blog", "id"), default="post"
+        "--type", dest="search_type", choices=("post", "blog", "id", "tag"), default="post"
+    )
+    search_parser.add_argument(
+        "--self-purchased",
+        dest="self_purchased",
+        action="store_true",
+        help="Only posts the blogger declared they bought with their own money (내돈내산).",
     )
     search_parser.add_argument(
         "--sort", choices=("sim", "date"), default="sim", action=_StoreExplicit
@@ -325,13 +331,14 @@ def _cmd_search(args: argparse.Namespace) -> int:
                 client,
                 args.query,
                 search_type=args.search_type,
-                sort=args.sort if args.search_type != "id" else None,
+                sort=args.sort if args.search_type not in {"id", "tag"} else None,
                 since=args.since,
                 until=args.until,
                 limit=args.limit,
                 raw=args.raw,
+                self_purchased=args.self_purchased,
             ),
-            "posts" if args.search_type == "post" else "blogs",
+            "posts" if args.search_type in {"post", "tag"} else "blogs",
         )
 
 
@@ -432,8 +439,7 @@ def _validate_read_args(parser: argparse.ArgumentParser, args: argparse.Namespac
                     parser.error("--query does not support --sort popular")
                 if args.notices:
                     parser.error("--query does not support --notices")
-                if args.raw:
-                    parser.error("--query does not support --raw")
+
         return
     if not args.query.strip():
         parser.error("query must be non-empty")
@@ -445,6 +451,8 @@ def _validate_read_args(parser: argparse.ArgumentParser, args: argparse.Namespac
         parser.error("--sort, --since, and --until are not supported for --type id")
     if args.search_type != "post" and (args.since is not None or args.until is not None):
         parser.error("--since and --until are only supported for --type post")
+    if args.self_purchased and args.search_type != "post":
+        parser.error("--self-purchased is only supported for --type post")
 
 
 def main(argv: list[str] | None = None) -> int:
