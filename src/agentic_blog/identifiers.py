@@ -18,7 +18,11 @@ def _invalid(value: object, kind: str) -> InvalidIdentifierError:
 
 
 def _blog_id(value: object) -> str:
-    if not isinstance(value, str) or _BLOG_ID_RE.fullmatch(value) is None or value.isdecimal():
+    # An all-numeric id is a real blog id, not a mistyped blogNo. `8892050` answers on
+    # category-list, post-list, public-buddies and in-blog search, and its posts render at
+    # m.blog.naver.com/8892050/{logNo}. Rejecting the shape made every such blog unreadable —
+    # they turn up in ordinary search results, so the tool simply could not follow its own output.
+    if not isinstance(value, str) or _BLOG_ID_RE.fullmatch(value) is None:
         raise _invalid(value, "blog id")
     return value
 

@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-25
+
+### Fixed
+
+- Blogs whose id is all digits can be read. Naver issues such ids — `8892050` answers on `category-list`, `post-list`, `public-buddies`, and in-blog search, and its posts render at `m.blog.naver.com/8892050/{logNo}` — but the identifier validator rejected the shape as though it could only be a mistyped numeric `blogNo`. Since these blogs appear in ordinary search results, the tool could return a post and then refuse to open it. Found by an end-to-end session that hit exactly that wall while collecting reviews.
+
 ## [0.2.0] - 2026-07-25
 
 ### Added
