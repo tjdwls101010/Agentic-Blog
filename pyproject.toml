@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-blog"
-version = "0.2.0"
+version = "0.2.1"
 description = "Read public Naver Blog content with a small, agent-friendly CLI."
 readme = "README.md"
 requires-python = ">=3.11"

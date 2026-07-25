@@ -179,3 +179,17 @@ def test_exit_code_table_preserves_the_documented_unassigned_code():
 def test_load_fixture_rejects_paths_and_non_filenames(name):
     with pytest.raises(ValueError):
         load_fixture(name)
+
+
+@pytest.mark.parametrize("blog_id", ["8892050", "1234567890"])
+def test_all_numeric_blog_ids_are_accepted(blog_id) -> None:
+    """Naver issues all-numeric blog ids, and they appear in ordinary search results.
+
+    `8892050` answers on category-list, post-list, public-buddies and in-blog search, and
+    its posts render at m.blog.naver.com/8892050/{logNo}. Rejecting the shape as though it
+    were a mistyped `blogNo` left the tool unable to open blogs its own search returned.
+    """
+    assert parse_blog_ref(blog_id).blog_id == blog_id
+    assert parse_post_ref(f"https://m.blog.naver.com/{blog_id}/224355621587") == PostRef(
+        blog_id, "224355621587"
+    )
