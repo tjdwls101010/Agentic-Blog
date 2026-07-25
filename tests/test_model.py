@@ -935,3 +935,37 @@ def test_phase4_build_comment_maps_only_explicit_deleted_and_secret_markers() ->
 
     assert comment.is_deleted is True
     assert comment.is_secret is True
+
+
+def _notice_node() -> dict:
+    fixture = load_fixture("phase3.json")
+    return deepcopy(fixture["notice_post_list"]["result"]["noticePostViewList"][0])
+
+
+def test_notice_cards_report_the_comment_total_they_carry() -> None:
+    """Notice cards spell it `commentCount`; every other card uses `commentCnt`."""
+    node = _notice_node()
+
+    post = build_mobile_post(node, captured_at=_CAPTURED_AT, kind="notice", is_notice=True)
+
+    assert post.comment_count == 26
+
+
+def test_notice_visibility_comes_from_the_field_the_card_actually_has() -> None:
+    """Notices carry none of the buddyOpen-family flags, only `postOpenType`."""
+    node = _notice_node()
+    assert not {"notOpen", "bothBuddyOpen", "buddyOpen"} & set(node)
+
+    post = build_mobile_post(node, captured_at=_CAPTURED_AT, kind="notice", is_notice=True)
+
+    assert post.visibility == "public"
+
+
+def test_an_unobserved_notice_open_type_is_reported_as_unknown() -> None:
+    """`ALL_OPEN` is the only value ever measured; a second one is not worth guessing at."""
+    node = _notice_node()
+    node["postOpenType"] = "SOMETHING_NAVER_HAS_NOT_SHIPPED"
+
+    post = build_mobile_post(node, captured_at=_CAPTURED_AT, kind="notice", is_notice=True)
+
+    assert post.visibility is None
