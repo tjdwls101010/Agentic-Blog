@@ -11,6 +11,10 @@ Companion documents, in the order you will need them:
 | `09-package-defects.md` | 1 | four confirmed defects, the live sweep protocol, fixtures, the v0.1.1 release |
 | `10-skill-spec.md` | 2–3 | the SKILL.md specification, a full draft, E2E scenarios, the git procedure |
 
+**This arc is complete** — package v0.1.2 on PyPI, skill merged (PR #5), all ten E2E scenarios
+passing. The next arc, taking the tool from seven working commands to covering how people actually
+use Naver Blog, starts at `11-coverage-goal.md`.
+
 `07-skill-plan.md` is **superseded**. It was written before the package existed and several of its
 factual claims turned out to be wrong; it now carries a banner listing the corrections. Do not
 build from it.
