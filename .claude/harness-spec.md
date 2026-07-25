@@ -179,3 +179,32 @@ the PyPI simple index, which is what keeps it correct across releases like these
   `posts`/`blog` aborted with `UnicodeEncodeError` on 3 of 30 blogs. Fixed at the two text
   normalizers. It was outside the agreed scope, and shipping a coverage release over a known crash
   on ordinary data was not defensible.
+
+- **2026-07-25 (E2E validation, with the user's consent)** — Four live scenarios against the shipped
+  0.2.0 skill, each hand-checked against the fetched files rather than graded on fluency.
+  **4/4 pass**, and they found a package defect no offline check could (→ **v0.2.1**).
+
+  | # | scenario | what it had to prove | verdict |
+  |---|---|---|---|
+  | 11 | 내돈내산 후기 요청 | uses `--self-purchased` **and** calls it self-declared, not ad-free | pass |
+  | 12 | 태그 탐색 | picks `--type tag`, understands the tag-vs-fulltext axis | pass |
+  | 13 | 블로그 글 내용 정리 | answers from `body`, never from `brief` | pass |
+  | 14 | 블로그 내 검색 | uses the migrated `posts --query`, then reads bodies | pass |
+
+  What the transcripts show beyond compliance: scenario 11 opened bodies and **excluded a post
+  titled "내돈내산 한 달 사용 후기" whose body reads "쇼핑 커넥트 활동의 일환으로... 수수료를
+  제공받습니다"** — B16's judgment applied, not recited. Scenario 12 *derived* B21 empirically,
+  demonstrating full-text search's false positives (종로 오마카세 for a 제주 query) rather than
+  repeating the skill's wording. Scenario 13's claims were hand-verified: seven specific details
+  (약과, LESCURE 버터, 도토리 묵밥, …) all present in the 28,576-character body and none in `brief`.
+  B1's version check also fired against a real 0.1.2 → 0.2.0 gap and upgraded — its first genuine
+  test.
+
+  **Scenario 13 did not exercise `posts --query`** — the prompt let the model reach the answer
+  through the category tree instead, which is B11 working correctly. That was a gap in the scenario,
+  not the skill, so scenario 14 was added to cover the migrated command directly.
+
+  **The defect E2E found:** the identifier validator rejected all-numeric blog ids, which Naver
+  really issues. Scenario 11 hit it mid-task and reported it in its own answer. Offline tests could
+  not have caught it — none named the rule, and removing it broke nothing. This is the concrete
+  case for why `validate_harness.py` passing is not evidence the harness works.
