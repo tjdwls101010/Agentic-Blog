@@ -52,7 +52,7 @@ Naver products (카페/지식iN/뉴스/포스트/쇼핑/플레이스), and devel
 | B13 | Empty `buddies` is ordinary, not an error | skill | naver-blog | generated |
 | B14 | `stop_reason` semantics; `max_requests` means partial, not finished | skill | naver-blog | generated |
 | B15 | Cost model: 0.5s floor, 100-request budget. Bound fan-out **and report the shape actually covered** — a sampled answer presented as complete is wrong | skill | naver-blog | generated |
-| B16 | Sponsored content is pervasive and **Naver publishes no `is_ad` field**; judgment is the only instrument, and an invisible judgment is uncheckable | skill | naver-blog | generated |
+| B16 | Sponsored content is pervasive and **Naver publishes no `is_ad` field**; judgment is the only instrument, and an invisible judgment is uncheckable | skill | naver-blog | generated — **half of this is now stale**, see Change history 2026-07-25 (planning) |
 | B17 | Exit-code handling; **there is no exit 2**, unlike every sibling | skill | naver-blog | generated |
 | B18 | The unobserved region (이웃공개 / deleted / private / suspended) is labelled unobserved rather than diagnosed | skill | naver-blog | generated |
 | B19 | No writes exist; no `crawl`; keep captures out of the repo because it tracks `.json` fixtures | skill | naver-blog | generated |
@@ -139,3 +139,21 @@ the PyPI simple index, which is what keeps it correct across releases like these
   (PR #5) → notice-card fields and v0.1.2 (PR #6). Supersedes `docs/plan/07-skill-plan.md`, which
   carried three factual claims that live checks disproved. Skill unchanged by v0.1.2; only this
   spec's Context and Phase 1 sections were updated, since the skill states no version.
+
+- **2026-07-25 (planning, no components changed)** — Coverage arc, planning half. A second live
+  sweep against a **disjoint** 32-blog sample (`docs/plan/12-coverage-gap-analysis.md`) returned
+  224/224 exit 0 on v0.1.2 and found one real defect: `Blog.post_count` and `Blog.buddy_count` are
+  null by construction — neither `Blog` constructor assigns them — while `parse.py` already
+  validates both upstream values and discards them. A gap analysis then enumerated 33 reading
+  behaviours and put anonymous coverage at **17/26**. Agreed scope for the implementation arc is in
+  `docs/plan/13-build-spec.md`: 내돈내산 filter, tag search, and a JSON migration of in-blog search.
+
+  **B16 must be corrected when the skill is next edited.** It states Naver publishes no `is_ad`
+  field and that judgment is the only instrument. The first half still holds — there is no ad flag.
+  The second is now wrong: every search item carries `isBuyWithMyOwnMoney` and `isMarketPost`.
+  `isBuyWithMyOwnMoney` is the blogger's **self-declaration**, not a sponsorship guarantee (a
+  filtered result was observed carrying `true` with no "내돈내산" text anywhere in it, so it is a
+  structured field rather than text matching). The skill must not present that filter as "ad-free".
+  Rationale and wording in `13-build-spec.md` §5.1. **The skill file was deliberately not edited
+  this session** — this arc was planning-only, and the correction ships with the commands that make
+  the flag reachable.
