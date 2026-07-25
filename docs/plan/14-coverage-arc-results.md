@@ -1,6 +1,7 @@
 # Coverage arc — implementation results
 
-**Shipped 2026-07-25 as v0.2.0** (PR #8, PyPI, verified from a clean install).
+**Shipped 2026-07-25 as v0.2.0** (PR #8), then **v0.2.1** (PR #9) for a defect E2E found.
+Both verified from a clean PyPI install.
 Spec: `13-build-spec.md`. Findings that produced it: `12-coverage-gap-analysis.md`.
 
 ## 1. The "100점" checklist, filled in
@@ -19,8 +20,9 @@ Spec: `13-build-spec.md`. Findings that produced it: `12-coverage-gap-analysis.m
 | exit 0인데 데이터가 틀린 결함 | 1 | **0** | — |
 | **릴리즈 전 스윕이 잡은 신규 결함** | — | **1** (모든 이전 릴리즈에 존재) | 예상 밖 |
 | HTML 스크래핑 의존 프리미티브 | 2 | **1** (본문만, 대체 없음) | 예상대로 |
-| 오프라인 테스트 | 787 | **806** | — |
-| E2E 시나리오 | 10 통과 / 손대조 1 | 10 (기존) | **미실행 — §4** |
+| 오프라인 테스트 | 787 | **808** | — |
+| E2E 시나리오 | 10 통과 / 손대조 1 | **10 + 신규 4, 전부 통과 / 손대조 4** | §4 |
+| **E2E가 잡은 신규 결함** | — | **1** (v0.2.1로 수정) | 예상 밖 |
 
 커버가 65%→73%만 오른 것은 의도된 것입니다. 보류한 7개는 (a)(b)(c) 중 "사람이 자주 쓰는가"가
 약하다고 판정됐고, 숫자를 올리려고 만드는 것은 이 프로젝트가 피해 온 실패 모양입니다.
