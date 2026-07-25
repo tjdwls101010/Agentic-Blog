@@ -3,8 +3,8 @@
 ## Context
 
 Python 3.11+ package (`agentic-blog`, CLI `agentic-blog`, PyPI dist `agentic-blog`), hatchling
-build, pytest + ruff, single maintainer. Published to PyPI; **v0.1.1 shipped 2026-07-25** as part of
-this same pass (see "Phase 1" below). This repo carries a `CLAUDE.md`, but it is a verbatim copy of
+build, pytest + ruff, single maintainer. Published to PyPI; **v0.1.1 and v0.1.2 shipped 2026-07-25**
+as part of this same pass (see "Phase 1" below). This repo carries a `CLAUDE.md`, but it is a verbatim copy of
 the workspace-root general coding guidelines with nothing project-specific in it — extending it was
 proposed during planning and **the user declined**, choosing the leaner scope. No `.claude/`
 directory existed before this pass. Planning interview in Korean; generated harness in English,
@@ -115,6 +115,15 @@ API never sends, so fixture and parser agreed with each other and disagreed with
 
 Detail in `docs/plan/09-package-defects.md`; sweep protocol reproducible via `scratch/sweep/`.
 
+**v0.1.2** then closed the one gap v0.1.1 deliberately left open and flagged rather than absorbed:
+the notice card spells its comment total `commentCount`, and states its visibility as
+`postOpenType` rather than through the `buddyOpen`-family flags every other listing uses — so
+notice visibility had been correct only because `_search_visibility` fell through to its default on
+three absent fields.
+
+**The skill hardcodes no version**, and must not start to: it reads `--version` and compares against
+the PyPI simple index, which is what keeps it correct across releases like these two.
+
 ## Validation
 
 - 25-row claims table in `docs/plan/10-skill-spec.md` §3, re-verified row by row against a clean
@@ -126,6 +135,7 @@ Detail in `docs/plan/09-package-defects.md`; sweep protocol reproducible via `sc
 
 ## Change history
 
-- **2026-07-25** — Initial pass. Planning (PR #3) → package fixes and v0.1.1 (PR #4) → this skill.
-  Supersedes `docs/plan/07-skill-plan.md`, which carried three factual claims that live checks
-  disproved.
+- **2026-07-25** — Initial pass. Planning (PR #3) → package fixes and v0.1.1 (PR #4) → this skill
+  (PR #5) → notice-card fields and v0.1.2 (PR #6). Supersedes `docs/plan/07-skill-plan.md`, which
+  carried three factual claims that live checks disproved. Skill unchanged by v0.1.2; only this
+  spec's Context and Phase 1 sections were updated, since the skill states no version.
