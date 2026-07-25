@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A `naver-blog` Claude Code skill at `.claude/skills/naver-blog/`, so Claude can chain the CLI's single-target primitives into multi-hop answers. Not part of the PyPI distribution.
+
 ## [0.1.1] - 2026-07-25
 
 ### Fixed
