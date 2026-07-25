@@ -70,10 +70,19 @@
       "noticePostViewList": [
         {
           "logNo": 10002,
-          "blogNo": 20001,
-          "domainIdOrBlogId": "synthetic_alice",
+          "title": "Synthetic notice",
           "titleWithInspectMessage": "Synthetic notice",
-          "thumbnailUrl": "https://media.example.invalid/posts/10002.jpg"
+          "filteredTitle": "Synthetic notice",
+          "relationType": null,
+          "postOpenType": "ALL_OPEN",
+          "commentYn": true,
+          "addDate": 1783926380474,
+          "blogId": "synthetic_alice",
+          "blogNo": 20001,
+          "postBlockType": "NORMAL_POST",
+          "commentCount": 26,
+          "englishLogName": "mylog",
+          "categoryNo": 9
         }
       ]
     }

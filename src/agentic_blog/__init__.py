@@ -1,3 +1,3 @@
 """Tools for reading public Naver Blog content."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

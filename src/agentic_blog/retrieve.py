@@ -419,6 +419,7 @@ def fetch_post(
         url=f"https://blog.naver.com/{post_ref.blog_id}/{post_ref.log_no}",
         title=info.post_title,
         body=body.markdown,
+        created_at=body.created_at,
         comment_count=info.total_count,
         media=list(body.media),
         comments=None if not comments else [],

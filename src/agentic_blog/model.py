@@ -839,8 +839,13 @@ def build_mobile_post(
     is_notice: bool = False,
 ) -> Post:
     """Build a Post from one explicitly identified mobile list-card variant."""
-    if kind in {"chronological", "notice"}:
+    if kind == "chronological":
         blog_id = _phase3_required_id(node, "domainIdOrBlogId")
+        blog_no = _phase3_required_id(node, "blogNo")
+    elif kind == "notice":
+        # The notice card is its own upstream shape: it names the blog with `blogId` and leaves
+        # `domainIdOrBlogId` null.
+        blog_id = _phase3_required_id(node, "blogId")
         blog_no = _phase3_required_id(node, "blogNo")
     elif kind == "popular":
         blog_id = _phase3_required_id(node, "blogId")
@@ -1005,11 +1010,14 @@ def build_comment(node: dict[str, Any]) -> Comment:
         for image in images:
             if not isinstance(image, dict):
                 raise TypeError("imageList entries must be objects")
-            image_url = _comment_string(image, "imageUrl")
-            assert image_url is not None
+            # CBOX serves some attachments with `imageUrl` null and the address under `url`.
+            image_url = _comment_string(image, "imageUrl", nullable=True) or _comment_string(
+                image, "url", nullable=True
+            )
             _comment_non_negative_integer(image, "width")
             _comment_non_negative_integer(image, "height")
-            image_urls.append(image_url)
+            if image_url is not None:
+                image_urls.append(image_url)
 
         return Comment(
             comment_no=comment_no,

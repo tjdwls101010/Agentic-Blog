@@ -691,3 +691,54 @@ def test_phase4_parsers_fail_closed_on_envelope_and_tree_drift(surface, mutate, 
 
     with pytest.raises(EnvelopeParseError, match=re.escape(path)):
         parser(payload)
+
+
+def test_video_thumbnails_carry_play_time_as_an_integer() -> None:
+    """Naver sends play seconds as an int on video thumbnails and null on stills."""
+    fixture = load_fixture("phase3.json")
+    for value in (34, "34", None):
+        payload = deepcopy(fixture["post_list"])
+        payload["result"]["items"][0]["thumbnailList"][0]["videoPlayTime"] = value
+
+        assert parse_post_list(payload)
+
+
+@pytest.mark.parametrize("value", [True, -1, 1.5, []])
+def test_play_time_still_rejects_shapes_naver_does_not_send(value: object) -> None:
+    fixture = load_fixture("phase3.json")
+    payload = deepcopy(fixture["post_list"])
+    payload["result"]["items"][0]["thumbnailList"][0]["videoPlayTime"] = value
+
+    with pytest.raises(
+        EnvelopeParseError,
+        match=re.escape("response.result.items[0].thumbnailList[0].videoPlayTime"),
+    ):
+        parse_post_list(payload)
+
+
+def test_notice_cards_identify_their_blog_without_domain_id() -> None:
+    """The notice surface is its own upstream shape: `blogId`, never `domainIdOrBlogId`."""
+    fixture = load_fixture("phase3.json")
+    payload = deepcopy(fixture["notice_post_list"])
+    payload["result"]["noticePostViewList"][0]["domainIdOrBlogId"] = None
+
+    (card,) = parse_post_list(payload, kind="notice")
+
+    assert card["blogId"] == "synthetic_alice"
+
+
+def test_comment_images_may_carry_their_address_under_url() -> None:
+    """CBOX serves some attachments with `imageUrl` null and the CDN address under `url`."""
+    fixture = load_fixture("phase4.json")
+    payload = deepcopy(fixture["cbox_list"])
+    comment = payload["result"]["commentList"][0]
+    comment["imageList"] = [
+        {
+            "imageUrl": None,
+            "url": "https://g-cbox.pstatic.net/synthetic/image",
+            "width": 640,
+            "height": 480,
+        }
+    ]
+
+    assert parse_cbox_list(payload)
