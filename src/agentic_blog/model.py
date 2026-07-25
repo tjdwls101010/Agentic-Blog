@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from html import unescape
-from types import UnionType
+from types import MappingProxyType, UnionType
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 
@@ -245,9 +245,18 @@ class Blog:
         return result
 
 
-_STRONG_TAG = re.compile(
-    r"""<strong\b(?P<attributes>(?:[^>"']+|"[^"]*"|'[^']*')*)>(?P<content>.*?)</strong\s*>""",
+_HIGHLIGHT_TAG = re.compile(
+    r"""<(?P<tag>strong|em)\b(?P<attributes>(?:[^>"']+|"[^"]*"|'[^']*')*)"""
+    r""">(?P<content>.*?)</(?P=tag)\s*>""",
     re.IGNORECASE | re.DOTALL,
+)
+#: Each search host marks matched terms with its own tag and class. Section sends
+#: <strong class="search_keyword">; the mobile search API sends <em class="highlight">.
+#: Only these exact pairs are unwrapped, so a title that genuinely contains <em> or
+#: angle brackets — Korean titles quote works as <이것은 개념미술이 (아니)다> — survives intact.
+_HIGHLIGHT_CLASSES = MappingProxyType({"strong": "search_keyword", "em": "highlight"})
+_LONE_SURROGATE = re.compile(
+    r"[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]"
 )
 _INTEGER_TEXT = re.compile(r"-?(?:0|[1-9][0-9]*)\Z")
 _COUNT_TEXT = re.compile(r"(?:0|[1-9][0-9]*)\Z")
@@ -270,18 +279,30 @@ def _search_text(value: object | None) -> str | None:
         return None
 
     def remove_highlight(match: re.Match[str]) -> str:
-        classes = _strong_class(match["attributes"])
+        classes = _tag_class(match["attributes"])
+        marker = _HIGHLIGHT_CLASSES[match["tag"].lower()]
         return (
-            match["content"]
-            if classes is not None and "search_keyword" in classes.split()
-            else match[0]
+            match["content"] if classes is not None and marker in classes.split() else match[0]
         )
 
-    return unescape(_STRONG_TAG.sub(remove_highlight, value))
+    return _drop_lone_surrogates(unescape(_HIGHLIGHT_TAG.sub(remove_highlight, value)))
 
 
-def _strong_class(attributes: str) -> str | None:
-    """Return the real class attribute from a quote-aware strong start tag."""
+def _drop_lone_surrogates(value: str) -> str:
+    """Drop half a surrogate pair left behind by Naver's own truncation.
+
+    Naver cuts ``briefContents`` at a fixed length, and when the cut lands inside an emoji it
+    ships the leading surrogate without its partner — a real teaser ends
+    ``'즐기기 좋아요 \\ud83d...'``. That is not a character and has no UTF-8 encoding, so
+    serializing it raised UnicodeEncodeError and took the whole command down on an otherwise
+    ordinary blog. The character was already destroyed upstream; dropping the orphan is the
+    only remaining truthful option, and inventing a replacement would not be one.
+    """
+    return _LONE_SURROGATE.sub("", value)
+
+
+def _tag_class(attributes: str) -> str | None:
+    """Return the real class attribute from a quote-aware start tag."""
     index = 0
     while index < len(attributes):
         while index < len(attributes) and attributes[index].isspace():
@@ -417,7 +438,12 @@ def _notice_visibility(node: dict[str, Any]) -> PostVisibility | None:
 def build_search_post(
     node: dict[str, Any], *, captured_at: datetime, include_raw: bool = False
 ) -> Post:
-    """Build a listing-only ``Post`` from one section-search post node."""
+    """Build a listing-only ``Post`` from one section-search post node.
+
+    No command routes through this any more: ``search --type post`` moved to the mobile
+    host, which returns the same posts and fills five more fields. Section still answers
+    ``--type blog`` and ``--type id``, so its card family stays supported here.
+    """
     blog_id = _search_required_id(node.get("domainIdOrBlogId", _SEARCH_MISSING), name="blog id")
     log_no = _search_required_id(node.get("logNo", _SEARCH_MISSING), name="log number")
     return Post(
@@ -445,6 +471,43 @@ def build_search_post(
         ),
         visibility=_search_visibility(node),
         is_notice=_search_flag(node, "isNotice"),
+        captured_at=captured_at,
+        raw=node if include_raw else None,
+    )
+
+
+def build_mobile_search_post(
+    node: dict[str, Any], *, captured_at: datetime, include_raw: bool = False
+) -> Post:
+    """Build a listing-only ``Post`` from one m.blog search card.
+
+    The three mobile search surfaces — global post search, tag search, and in-blog search —
+    share one card family but not one field set: only in-blog search spells the summary
+    ``contents`` rather than ``content``, and tag search omits ``blogNo``, ``url``,
+    ``blogName`` and ``categoryName`` entirely. Absent optional fields stay null.
+    """
+    blog_id = _search_required_id(node.get("blogId", _SEARCH_MISSING), name="blog id")
+    log_no = _search_required_id(node.get("logNo", _SEARCH_MISSING), name="log number")
+    summary = node.get("content") if "content" in node else node.get("contents")
+    return Post(
+        log_no=log_no,
+        blog_id=blog_id,
+        blog_no=_search_id(node["blogNo"]) if node.get("blogNo") is not None else None,
+        url=_search_nullable_string(node.get("url")) or f"https://blog.naver.com/{blog_id}/{log_no}",
+        title=_search_text(node.get("title")) or "",
+        brief=_search_text(summary),
+        created_at=_search_created_at(node.get("addDate")),
+        blog_name=_search_text(node.get("blogName")),
+        nickname=_search_text(node.get("nickname")),
+        category_name=_search_text(node.get("categoryName")),
+        comment_count=_search_count(node.get("commentCount")),
+        like_count=_search_count(node.get("sympathyCount")),
+        thumbnail_url=_search_nullable_string(node.get("thumbnailUrl")),
+        # Grounded in the endpoint, not in absent flags: these are anonymous search
+        # surfaces, and Naver's public index cannot return a neighbour-only or private
+        # post to a logged-out caller. The mobile card carries no visibility field at
+        # all, so deriving this from missing keys would be right only by accident.
+        visibility="public",
         captured_at=captured_at,
         raw=node if include_raw else None,
     )
@@ -958,7 +1021,9 @@ def _comment_string(node: dict[str, Any], name: str, *, nullable: bool = False) 
         return None
     if not isinstance(value, str):
         raise TypeError(f"{name} must be a string" + (" or null" if nullable else ""))
-    return value
+    # Same invariant as display text: nothing we emit may carry an unpaired surrogate,
+    # because the output format cannot encode one.
+    return _drop_lone_surrogates(value)
 
 
 def _comment_non_negative_integer(node: dict[str, Any], name: str) -> int:

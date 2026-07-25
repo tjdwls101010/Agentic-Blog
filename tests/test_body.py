@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agentic_blog.body import KST, parse_post_body, parse_post_search
+from agentic_blog.body import KST, parse_post_body
 from agentic_blog.errors import BodyParseError
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -72,78 +72,6 @@ def test_parse_post_body_does_not_duplicate_nested_component_content() -> None:
 
     assert result.markdown == "밖"
     assert result.media == ()
-
-
-def test_parse_post_search_extracts_only_anchored_cards() -> None:
-    source = """
-    <div id='postSearchList'><ul>
-      <li>
-        <a href='https://blog.naver.com/PostView.naver?blogId=synthetic_alice&amp;logNo=17'>링크</a>
-        <strong class='title'>첫 <em>제목</em></strong>
-        <p class='brief'>짧은 소개</p><span class='date'>2026. 7. 25.</span>
-      </li>
-      <li>
-        <a href='/PostView.naver?blogId=synthetic_alice&amp;logNo=18'>링크</a>
-        <strong class='title'>둘째 제목</strong><span class='date'>2026. 7. 24.</span>
-      </li>
-    </ul></div>
-    """
-
-    assert parse_post_search(source) == (
-        parse_post_search(source)[0].__class__(
-            blog_id="synthetic_alice",
-            log_no="17",
-            url="https://blog.naver.com/PostView.naver?blogId=synthetic_alice&logNo=17",
-            title="첫 제목",
-            brief="짧은 소개",
-            created_at=datetime(2026, 7, 25, tzinfo=KST),
-        ),
-        parse_post_search(source)[1].__class__(
-            blog_id="synthetic_alice",
-            log_no="18",
-            url="/PostView.naver?blogId=synthetic_alice&logNo=18",
-            title="둘째 제목",
-            brief=None,
-            created_at=datetime(2026, 7, 24, tzinfo=KST),
-        ),
-    )
-
-
-def test_parse_post_search_extracts_measured_legacy_table_variant() -> None:
-    source = """
-    <div id='post-area'>
-      <table><tr><td><table><tr><td>
-        <a class='s_link'
-           href='https://blog.naver.com/synthetic_alice?Redirect=Log&amp;logNo=19'>
-          표 기반 제목
-        </a>
-      </td><td class='eng'>2026/07/25 12:34</td></tr>
-      <tr><td>표 기반 소개</td></tr></table></td></tr></table>
-    </div>
-    """
-
-    (card,) = parse_post_search(source)
-
-    assert (card.blog_id, card.log_no) == ("synthetic_alice", "19")
-    assert card.title == "표 기반 제목"
-    assert card.brief == "표 기반 소개"
-    assert card.created_at == datetime(2026, 7, 25, 12, 34, tzinfo=KST)
-
-
-def test_parse_post_search_allows_only_explicit_empty_marker() -> None:
-    assert (
-        parse_post_search(
-            "<div id='postSearchList'><p class='no_result'>검색결과가 없습니다</p></div>"
-        )
-        == ()
-    )
-    assert (
-        parse_post_search("<div id='post-area'><strong>검색결과가 없습니다.</strong></div>") == ()
-    )
-    with pytest.raises(BodyParseError):
-        parse_post_search("<div id='postSearchList'><ul></ul></div>")
-    with pytest.raises(BodyParseError):
-        parse_post_search("<div id='postSearchList'><ul><li>not linked</li></ul></div>")
 
 
 def test_editor_comment_markers_never_reach_the_rendered_body() -> None:

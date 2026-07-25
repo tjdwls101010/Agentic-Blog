@@ -59,8 +59,8 @@ Produced by `search --type blog`, `search --type id`, `blog`, and `buddies`.
 | `description` | string or null | Blog description. |
 | `profile_image_url` | string or null | Profile image URL. |
 | `url` | string or null | Canonical blog URL. |
-| `buddy_count` | integer or null | Public-neighbour count when supplied. |
-| `post_count` | integer or null | Post count when supplied. |
+| `buddy_count` | integer or null | Neighbours the blog **publicly discloses**, from `blog`. Naver keeps a second, usually far larger total visible only to the owner — one measured blog publishes 0 of its 1,908 — so `0` means "does not publish a neighbour list", not "has no neighbours". Null when the request budget stopped before this could be read. |
+| `post_count` | integer or null | The blog's own post total, from `blog`. |
 | `categories` | array of `Category` or null | Full category tree from `blog`; null elsewhere. |
 | `captured_at` | string or null | Collection time. |
 | `raw` | object, omitted unless opted in | Raw upstream blog node; available only on supported commands. |

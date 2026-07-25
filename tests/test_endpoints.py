@@ -6,14 +6,9 @@ import pytest
 
 import agentic_blog.endpoints as endpoints
 from agentic_blog.endpoints import (
-    CBOX,
-    CBOX_LIST,
     CBOX_OBJECT_ID,
     CBOX_POOL,
-    LEGACY,
-    LEGACY_POST_SEARCH_LIST,
     MOBILE,
-    MOBILE_HTML,
     POST_LIST_MAX_ITEM_COUNT,
     SECTION,
     SECTION_DIRECTORY_LIST,
@@ -28,11 +23,13 @@ from agentic_blog.endpoints import (
     directory_list,
     directory_post_list,
     directory_top_post_list,
+    in_blog_search,
+    mobile_search_post,
+    mobile_tag_search,
     notice_post_list,
     popular_post_list,
     post_html,
     post_list,
-    post_search_list,
     public_buddies,
     search_list,
 )
@@ -42,31 +39,6 @@ from agentic_blog.errors import InvalidIdentifierError
 def test_section_constants_describe_the_search_endpoint():
     assert SECTION == "https://section.blog.naver.com/ajax/"
     assert SECTION_SEARCH_LIST == "https://section.blog.naver.com/ajax/SearchList.naver"
-
-
-def test_post_search_list_uses_exact_section_parameters_with_korean_query():
-    request = search_list(
-        "커피 맛집",
-        search_type="post",
-        sort="date",
-        page=2,
-        count_per_page=7,
-        since="2026-07-01",
-        until="2026-07-25",
-    )
-
-    assert request == RequestSpec(
-        url="https://section.blog.naver.com/ajax/SearchList.naver",
-        params={
-            "type": "post",
-            "keyword": "커피 맛집",
-            "currentPage": 2,
-            "countPerPage": 7,
-            "orderBy": "date",
-            "startDate": "2026-07-01",
-            "endDate": "2026-07-25",
-        },
-    )
 
 
 def test_id_search_omits_unsupported_sort_and_date_parameters():
@@ -258,52 +230,6 @@ def test_phase3_request_specs_are_immutable_and_exclude_telemetry_endpoints():
     assert all("telemetry" not in url for url in all_urls)
 
 
-def test_phase4_builders_use_only_measured_mobile_cbox_and_legacy_endpoints():
-    assert MOBILE_HTML == "https://m.blog.naver.com/"
-    assert CBOX == "https://apis.naver.com/commentBox/cbox/"
-    assert LEGACY == "https://blog.naver.com/"
-    assert post_html("synthetic_alice", 10001) == RequestSpec(
-        "https://m.blog.naver.com/synthetic_alice/10001", {}
-    )
-    assert comments_info("synthetic_alice", 10001) == RequestSpec(
-        "https://m.blog.naver.com/api/blogs/synthetic_alice/posts/10001/comments-info", {}
-    )
-    assert cbox_list(20001, 10001, page=2, page_size=20, sort="FAVORITE") == RequestSpec(
-        CBOX_LIST,
-        {
-            "ticket": "blog",
-            "pool": "blogid",
-            "objectId": "20001_201_10001",
-            "groupId": "20001",
-            "templateId": "default",
-            "lang": "ko",
-            "country": "",
-            "_cv": "",
-            "pageType": "more",
-            "listType": "OBJECT",
-            "page": 2,
-            "pageSize": 20,
-            "indexSize": 10,
-            "replyPageSize": 10,
-            "followSize": 5,
-            "initialize": True,
-            "useAltSort": True,
-            "userType": "",
-            "categoryId": "",
-            "sort": "FAVORITE",
-        },
-    )
-    assert post_search_list("synthetic_alice", "합성 검색", page=2) == RequestSpec(
-        LEGACY_POST_SEARCH_LIST,
-        {
-            "blogId": "synthetic_alice",
-            "SearchText": "합성 검색",
-            "orderBy": "recentdate",
-            "currentPage": 2,
-        },
-    )
-
-
 def test_phase4_constants_preserve_non_derivable_cbox_contract():
     assert CBOX_POOL == "blogid"
     assert CBOX_OBJECT_ID == "{blog_no}_201_{log_no}"
@@ -320,9 +246,16 @@ def test_phase4_constants_preserve_non_derivable_cbox_contract():
         (cbox_list, (20001, 10001), {"page": 0}),
         (cbox_list, (20001, 10001), {"page_size": 0}),
         (cbox_list, (20001, 10001), {"sort": "recent"}),
-        (post_search_list, ("synthetic_alice", ""), {}),
-        (post_search_list, ("synthetic_alice", "query"), {"page": 0}),
-        (post_search_list, ("synthetic_alice", "query"), {"sort": "date"}),
+        (in_blog_search, ("synthetic_alice", ""), {}),
+        (in_blog_search, ("synthetic_alice", "query"), {"page": 0}),
+        (in_blog_search, ("synthetic_alice", "query"), {"sort": "recentdate"}),
+        (mobile_search_post, ("",), {}),
+        (mobile_search_post, ("query",), {"sort": "relevance"}),
+        (mobile_search_post, ("query",), {"page": 0}),
+        (mobile_search_post, ("query",), {"item_count": 31}),
+        (mobile_search_post, ("query",), {"since": "2026-01-02", "until": "2026-01-01"}),
+        (mobile_tag_search, ("",), {}),
+        (mobile_tag_search, ("query",), {"item_count": 31}),
     ],
 )
 def test_phase4_builders_reject_invalid_identifiers_pages_counts_and_sorts(builder, args, kwargs):

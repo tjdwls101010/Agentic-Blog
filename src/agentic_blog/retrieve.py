@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol
 
 from . import endpoints, parse
-from .body import parse_post_body, parse_post_search
+from .body import parse_post_body
 from .errors import EnvelopeParseError, NotFoundError
 from .identifiers import PostRef, parse_post_ref
 from .model import (
@@ -21,9 +21,9 @@ from .model import (
     build_comment,
     build_directory_post,
     build_mobile_post,
+    build_mobile_search_post,
     build_search_blog,
     build_search_id,
-    build_search_post,
     build_topic,
 )
 
@@ -106,6 +106,83 @@ def _build_search_card(
         ) from error
 
 
+def _paginate_search(
+    client: SearchClient,
+    *,
+    fetch_cards: Callable[[int], tuple[dict[str, Any], ...]],
+    build: Callable[..., SearchItem],
+    page_size: int,
+    card_path: Callable[[int], str],
+    limit: int | None,
+    raw: bool,
+    starting_requests: int,
+) -> RetrieveResult:
+    """Page one search surface, deduplicating, until the caller's bound or a short page.
+
+    Every search surface shares this loop so they cannot drift apart on the distinction
+    that matters to a caller: ``limit_reached`` promises there is more to fetch, while
+    ``no_next_page`` means the bound and the end of the results coincided. Telling them
+    apart on a short page needs the tail inspected, not just counted.
+
+    Paging always stops on a short page and never on a reported total. The mobile envelope
+    advertises millions of results across hundreds of thousands of pages while the host in
+    fact stops answering after 1,000 posts, so a total is not a bound.
+    """
+    items: list[SearchItem] = []
+    seen: set[tuple[str, str] | str] = set()
+    page_number = 1
+
+    while True:
+        if _counter(client, "remaining_requests") == 0:
+            return _result(items, "max_requests", starting_requests, client)
+        requests_before, remaining_before = _client_counters(client)
+        cards = fetch_cards(page_number)
+        requests_after, _ = _client_counters(client)
+        if requests_after != requests_before + 1:
+            raise ValueError("client requests_made must advance by one per request")
+        if _counter(client, "remaining_requests") != remaining_before - 1:
+            raise ValueError("client remaining_requests must decrease by one per request")
+        if not cards:
+            return _result(
+                items,
+                "no_matches" if not items else "no_next_page",
+                starting_requests,
+                client,
+            )
+
+        for index, node in enumerate(cards):
+            item = _build_search_card(
+                build,
+                node,
+                path=card_path(index),
+                captured_at=datetime.now(UTC),
+                include_raw=raw,
+            )
+            key = _identity(item)
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+            if limit is not None and len(items) == limit:
+                if len(cards) >= page_size:
+                    return _result(items, "limit_reached", starting_requests, client)
+                for tail_index, tail_node in enumerate(cards[index + 1 :], start=index + 1):
+                    tail_item = _build_search_card(
+                        build,
+                        tail_node,
+                        path=card_path(tail_index),
+                        captured_at=datetime.now(UTC),
+                        include_raw=raw,
+                    )
+                    if _identity(tail_item) not in seen:
+                        return _result(items, "limit_reached", starting_requests, client)
+                return _result(items, "no_next_page", starting_requests, client)
+
+        if len(cards) < page_size:
+            return _result(items, "no_next_page", starting_requests, client)
+        page_number += 1
+
+
 def search(
     client: SearchClient,
     query: str,
@@ -116,22 +193,32 @@ def search(
     until: date | None = None,
     limit: int | None = None,
     raw: bool = False,
+    self_purchased: bool = False,
 ) -> RetrieveResult:
-    """Return one bounded, deduplicated section-search result set.
+    """Return one bounded, deduplicated search result set.
+
+    Two hosts answer here. ``post`` and ``tag`` go to m.blog, which returns the same posts
+    in the same order as section for ``post`` but fills five more fields and is the only
+    host offering tag search and the self-purchased filter. ``blog`` and ``id`` stay on
+    section: its blog index is a different, larger corpus (15,441 vs 5,611 on one measured
+    query) and the mobile blog card carries no description, while ``id`` has no mobile
+    equivalent at all.
 
     Date bounds are sent to Naver in the request; this layer never filters them
     from returned records.
     """
     if not isinstance(query, str) or not query.strip():
         raise ValueError("query must be non-empty")
-    if search_type not in {"post", "blog", "id"}:
-        raise ValueError("search_type must be one of post, blog, id")
+    if search_type not in {"post", "blog", "id", "tag"}:
+        raise ValueError("search_type must be one of post, blog, id, tag")
     if sort not in {None, "sim", "date"}:
         raise ValueError("sort must be one of sim, date")
     if search_type == "id" and (sort is not None or since is not None or until is not None):
         raise ValueError("sort and date bounds are not supported for id searches")
     if search_type != "post" and (since is not None or until is not None):
         raise ValueError("date bounds are only supported for post searches")
+    if self_purchased and search_type != "post":
+        raise ValueError("self_purchased is only supported for post searches")
     _validate_limit(limit)
     _validate_dates(since, until)
     if not callable(getattr(client, "get_json", None)):
@@ -141,76 +228,62 @@ def search(
     if limit == 0:
         return _result([], "limit_reached", starting_requests, client)
 
-    count_per_page = 7 if search_type == "post" else 10
-    effective_sort = sort or "sim"
-    build = {
-        "post": build_search_post,
-        "blog": build_search_blog,
-        "id": build_search_id,
-    }[search_type]
-    items: list[SearchItem] = []
-    seen: set[tuple[str, str] | str] = set()
-    page_number = 1
+    if search_type in {"post", "tag"}:
+        def fetch_mobile(page_number: int) -> tuple[dict[str, Any], ...]:
+            if search_type == "tag":
+                spec = endpoints.mobile_tag_search(
+                    query, page=page_number, item_count=endpoints.SEARCH_MAX_ITEM_COUNT
+                )
+            else:
+                spec = endpoints.mobile_search_post(
+                    query,
+                    sort=sort or "sim",
+                    page=page_number,
+                    item_count=endpoints.SEARCH_MAX_ITEM_COUNT,
+                    since=since.isoformat() if since is not None else None,
+                    until=until.isoformat() if until is not None else None,
+                    self_purchased=self_purchased,
+                )
+            return parse.parse_mobile_search_page(client.get_json(spec))
 
-    while True:
-        _, remaining_requests = _client_counters(client)
-        if remaining_requests == 0:
-            return _result(items, "max_requests", starting_requests, client)
-        spec = endpoints.search_list(
-            query,
-            search_type=search_type,
-            sort=effective_sort if search_type != "id" else None,
-            page=page_number,
-            count_per_page=count_per_page,
-            since=since.isoformat() if since is not None else None,
-            until=until.isoformat() if until is not None else None,
+        return _paginate_search(
+            client,
+            fetch_cards=fetch_mobile,
+            build=build_mobile_search_post,
+            page_size=endpoints.SEARCH_MAX_ITEM_COUNT,
+            card_path=lambda index: f"response.result.list[{index}]",
+            limit=limit,
+            raw=raw,
+            starting_requests=starting_requests,
         )
-        requests_before, remaining_before = _client_counters(client)
-        page = parse.parse_search_page(client.get_json(spec))
-        requests_after, _ = _client_counters(client)
-        if requests_after != requests_before + 1:
-            raise ValueError("client requests_made must advance by one per request")
-        if _counter(client, "remaining_requests") != remaining_before - 1:
-            raise ValueError("client remaining_requests must decrease by one per request")
-        if not page.items:
-            return _result(
-                items,
-                "no_matches" if not items else "no_next_page",
-                starting_requests,
-                client,
-            )
 
-        for index, node in enumerate(page.items):
-            item = _build_search_card(
-                build,
-                node,
-                path=f"response.result.searchList[{index}]",
-                captured_at=datetime.now(UTC),
-                include_raw=raw,
-            )
-            key = _identity(item)
-            if key in seen:
-                continue
-            seen.add(key)
-            items.append(item)
-            if limit is not None and len(items) == limit:
-                if len(page.items) >= count_per_page:
-                    return _result(items, "limit_reached", starting_requests, client)
-                for tail_index, tail_node in enumerate(page.items[index + 1 :], start=index + 1):
-                    tail_item = _build_search_card(
-                        build,
-                        tail_node,
-                        path=f"response.result.searchList[{tail_index}]",
-                        captured_at=datetime.now(UTC),
-                        include_raw=raw,
-                    )
-                    if _identity(tail_item) not in seen:
-                        return _result(items, "limit_reached", starting_requests, client)
-                return _result(items, "no_next_page", starting_requests, client)
+    count_per_page = 10
+    effective_sort = sort or "sim"
+    build = {"blog": build_search_blog, "id": build_search_id}[search_type]
 
-        if len(page.items) < count_per_page:
-            return _result(items, "no_next_page", starting_requests, client)
-        page_number += 1
+    def fetch_section(page_number: int) -> tuple[dict[str, Any], ...]:
+        return parse.parse_search_page(
+            client.get_json(
+                endpoints.search_list(
+                    query,
+                    search_type=search_type,
+                    sort=effective_sort if search_type != "id" else None,
+                    page=page_number,
+                    count_per_page=count_per_page,
+                )
+            )
+        ).items
+
+    return _paginate_search(
+        client,
+        fetch_cards=fetch_section,
+        build=build,
+        page_size=count_per_page,
+        card_path=lambda index: f"response.result.searchList[{index}]",
+        limit=limit,
+        raw=raw,
+        starting_requests=starting_requests,
+    )
 
 
 def _request(client: SearchClient, spec: endpoints.RequestSpec) -> object:
@@ -223,6 +296,7 @@ def _request(client: SearchClient, spec: endpoints.RequestSpec) -> object:
     if _counter(client, "remaining_requests") != remaining_before - 1:
         raise ValueError("client remaining_requests must decrease by one per request")
     return payload
+
 
 
 def _request_text(client: SearchClient, spec: endpoints.RequestSpec) -> str:
@@ -239,14 +313,17 @@ def _request_text(client: SearchClient, spec: endpoints.RequestSpec) -> str:
     return payload
 
 
+
 def _can_request(client: SearchClient) -> bool:
     _, remaining_requests = _client_counters(client)
     return remaining_requests > 0
 
 
+
 def _validate_category(category: int) -> None:
     if not isinstance(category, int) or isinstance(category, bool) or category < 0:
         raise ValueError("category must be a non-negative integer")
+
 
 
 def fetch_blog(client: SearchClient, blog_id: str, *, raw: bool = False) -> RetrieveResult:
@@ -274,10 +351,19 @@ def fetch_blog(client: SearchClient, blog_id: str, *, raw: bool = False) -> Retr
             break
     else:
         raise NotFoundError(f"blog not found: {blog_id}")
+    categories_payload = _request(client, endpoints.category_list(blog_id))
     blog.categories = [
-        build_category(node)
-        for node in parse.parse_category_list(_request(client, endpoints.category_list(blog_id)))
+        build_category(node) for node in parse.parse_category_list(categories_payload)
     ]
+    blog.post_count = parse.parse_blog_post_count(categories_payload)
+
+    # buddy_count needs its own request, so it yields to the budget rather than failing the
+    # read. A blog that discloses no neighbours reports 0 here, which is a real answer and
+    # not the same as this field being unavailable.
+    if _counter(client, "remaining_requests") > 0:
+        blog.buddy_count = parse.parse_buddies(
+            _request(client, endpoints.public_buddies(blog_id, page=1))
+        ).public_buddy_count
     return _result([blog], "single_target", starting_requests, client)
 
 
@@ -482,7 +568,17 @@ def _fetch_post_search(
     query: str,
     *,
     limit: int | None,
+    sort: str = "sim",
+    raw: bool = False,
 ) -> RetrieveResult:
+    """Search one blog's own posts through the mobile JSON endpoint.
+
+    This replaced an HTML scrape of PostSearchList.naver that yielded 10 bare log numbers a
+    page and then had to re-fetch each one to fill it in. The JSON returns 20 already-filled
+    cards a page, so the same answer costs fewer requests and no longer rests on a page
+    template staying put — the one place where a Naver markup change broke a primitive
+    rather than a field.
+    """
     if not isinstance(query, str) or not query.strip():
         raise ValueError("query must be non-empty")
     _validate_limit(limit)
@@ -493,29 +589,26 @@ def _fetch_post_search(
     items: list[RetrieveItem] = []
     seen: set[tuple[str, str]] = set()
     page_number = 1
-    page_size = 10
+    page_size = 20
     while True:
         if not _can_request(client):
             return _result(items, "max_requests", starting_requests, client)
-        cards = parse_post_search(
-            _request_text(client, endpoints.post_search_list(blog_id, query, page=page_number))
+        cards = parse.parse_mobile_search_page(
+            client.get_json(endpoints.in_blog_search(blog_id, query, sort=sort, page=page_number))
         )
-        for card in cards:
-            key = (card.blog_id, card.log_no)
+        for index, node in enumerate(cards):
+            item = _build_search_card(
+                build_mobile_search_post,
+                node,
+                path=f"response.result.list[{index}]",
+                captured_at=datetime.now(UTC),
+                include_raw=raw,
+            )
+            key = (item.blog_id, item.log_no)
             if key in seen:
                 continue
             seen.add(key)
-            items.append(
-                Post(
-                    log_no=card.log_no,
-                    blog_id=card.blog_id,
-                    url=f"https://blog.naver.com/{card.blog_id}/{card.log_no}",
-                    title=card.title,
-                    brief=card.brief,
-                    created_at=card.created_at,
-                    captured_at=datetime.now(UTC),
-                )
-            )
+            items.append(item)
             if limit is not None and len(items) == limit:
                 return _result(items, "limit_reached", starting_requests, client)
         if len(cards) < page_size:
@@ -555,9 +648,10 @@ def fetch_posts(
             raise ValueError("query does not support popular sort")
         if notices:
             raise ValueError("query does not support notices")
-        if raw:
-            raise ValueError("query does not support raw")
-        return _fetch_post_search(client, blog_id, query, limit=limit)
+        # "recent" is this command's only in-blog-search ordering and its default, so it maps
+        # to the endpoint's `date`. Relevance ordering exists upstream but `posts --sort`
+        # speaks recent/popular, and widening that vocabulary is not this change's job.
+        return _fetch_post_search(client, blog_id, query, limit=limit, sort="date", raw=raw)
     starting_requests, _ = _client_counters(client)
     if limit == 0:
         return _result([], "limit_reached", starting_requests, client)

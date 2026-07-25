@@ -27,6 +27,10 @@ class BuddyPage:
     items: tuple[dict[str, Any], ...]
     current_page: int
     total_page_count: int
+    #: Neighbours a logged-out reader can actually enumerate. Distinct from
+    #: ``totalMyBuddyCount``, which counts every neighbour including undisclosed ones and
+    #: is routinely far larger — 248 vs 1 on one measured blog, 1,908 vs 0 on another.
+    public_buddy_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -222,6 +226,49 @@ def _validate_mobile_post(
         _boolean(node.get(name), f"{path}.{name}")
 
 
+def parse_mobile_search_page(payload: object) -> tuple[dict[str, Any], ...]:
+    """Extract one m.blog search page's cards without normalizing them.
+
+    Covers all three mobile search surfaces. Global post search and in-blog search name the
+    array ``list``; tag search names it ``items``.
+
+    This returns cards and nothing else **on purpose.** The envelope also carries
+    ``totalCount`` and ``totalPage``, and on the global search those read 12,356,134 and
+    411,872 while paging in fact dies at 1,000 — the figures size the corpus and drift
+    between pages. Not surfacing them is what stops a caller from paginating on a lie.
+    """
+    result = _success_result(payload)
+    if "list" in result:
+        cards, name = result["list"], "list"
+    elif "items" in result:
+        cards, name = result["items"], "items"
+    else:
+        raise _drift("response.result.list", "a list")
+    if not isinstance(cards, list):
+        raise _drift(f"response.result.{name}", "a list")
+    for index, item in enumerate(cards):
+        item_path = f"response.result.{name}[{index}]"
+        node = _object(item, item_path)
+        _non_empty_string(node.get("blogId"), f"{item_path}.blogId")
+        _non_negative_integer(node.get("logNo"), f"{item_path}.logNo")
+        _string(node.get("title"), f"{item_path}.title")
+        _nullable_string(node.get("thumbnailUrl"), f"{item_path}.thumbnailUrl")
+        _nullable_non_negative_integer(node.get("addDate"), f"{item_path}.addDate")
+        for count_name in ("commentCount", "sympathyCount"):
+            _nullable_count(node.get(count_name), f"{item_path}.{count_name}")
+    return tuple(cards)
+
+
+def parse_blog_post_count(payload: object) -> int:
+    """Extract a blog's own post total from a CategoryList response.
+
+    ``parse_category_list`` has always validated this field and then dropped it, which is
+    why ``Blog.post_count`` shipped permanently null.
+    """
+    result = _success_result(payload)
+    return _non_negative_integer(result.get("mylogPostCount"), "response.result.mylogPostCount")
+
+
 def parse_category_list(payload: object) -> tuple[dict[str, Any], ...]:
     """Extract and flatten non-separator categories from a CategoryList response."""
     result = _success_result(payload)
@@ -301,8 +348,10 @@ def parse_buddies(payload: object) -> BuddyPage:
     result = _success_result(payload)
     _non_empty_string(result.get("blogId"), "response.result.blogId")
     _string(result.get("nickName"), "response.result.nickName")
-    for name in ("totalMyBuddyCount", "totalPublicBuddyCount"):
-        _non_negative_integer(result.get(name), f"response.result.{name}")
+    _non_negative_integer(result.get("totalMyBuddyCount"), "response.result.totalMyBuddyCount")
+    public_buddy_count = _non_negative_integer(
+        result.get("totalPublicBuddyCount"), "response.result.totalPublicBuddyCount"
+    )
     total_page_count = _non_negative_integer(
         result.get("totalPageCount"), "response.result.totalPageCount"
     )
@@ -326,6 +375,7 @@ def parse_buddies(payload: object) -> BuddyPage:
         items=tuple(buddies),
         current_page=current_page,
         total_page_count=total_page_count,
+        public_buddy_count=public_buddy_count,
     )
 
 
