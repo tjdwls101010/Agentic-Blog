@@ -1,5 +1,27 @@
 # The Claude Skill — plan for a later session
 
+> ## ⚠️ SUPERSEDED — 2026-07-25
+>
+> **Do not build from this document.** It was written before the package existed, and live
+> verification against the released 0.1.0 contradicted several of its factual claims. Build from
+> **`08-skill-session-kickoff.md`**, which supersedes this file, together with
+> `09-package-defects.md` and `10-skill-spec.md`.
+>
+> Wrong here, corrected there:
+>
+> - *"`count.comment` excludes replies; `count.total` includes them"* — no such fields exist. The
+>   real shape is `Post.comment_count` plus a nested `Comment.replies[]`.
+> - *"`buddies` returns `updateTime` as a string like `8분 전`"* — the `Blog` model has no such field.
+> - *"Exit 5 with 'neighbour-only' is a normal outcome"* — `TargetUnavailableError` is never raised
+>   anywhere in the source. What a neighbour-only read actually does has never been observed.
+>
+> Also missing here entirely: `stop_reason`, the 100-request-per-invocation budget, the bare-array
+> output shape, and the fact that exit code 2 is unassigned in this package.
+>
+> Kept and still correct: the `naver-blog` name and its reasoning, "no setup ever" deserving its own
+> section, `brief`-versus-`body` as the primary failure mode, the category tree as a blog's best
+> one-shot summary, and the pervasiveness of unflagged sponsored content.
+
 **Do not build this during the package implementation session.** Build the package, ship it to
 PyPI, then open a fresh session, load the `harness-creator` skill, and build the skill against the
 *installed* CLI (D15).
